@@ -27,6 +27,20 @@ Use the purpose-built agents for focused work:
 - **`testing`** — Rust unit tests and Vitest tests for logic-heavy stores and utilities; skips trivial UI
 - **`ui`** — component design, design tokens, interaction patterns, accessibility; Linear + Notion aesthetic
 - **`integrations`** — auth (PAT + Calendar OAuth/PKCE), API clients, data mapping to card types, upsert/deduplication logic
+- **`docs`** — technical and product documentation; inline code docs, DECISIONS.md updates, feature docs in `docs/`
+
+## Commands
+
+```bash
+pnpm tauri dev        # run full app (Tauri window + hot reload)
+pnpm dev              # run frontend only in browser (faster iteration)
+pnpm check            # TypeScript + Svelte type check
+cargo check           # Rust type check (run from src-tauri/)
+cargo test            # Rust tests (run from src-tauri/)
+pnpm test             # Svelte/TS tests (Vitest)
+```
+
+> Node: Volta conflicts with nvm. Run `nvm use 22` or `nvm alias default 22` before any pnpm/node commands.
 
 ## General principles
 

@@ -62,7 +62,7 @@ Configurable per account. Default: 8h. User sets their own (e.g. 7h).
 | Frontend | SvelteKit + TypeScript |
 | Drag and drop | svelte-dnd-action |
 | Local database | SQLite via tauri-plugin-sql |
-| API key storage | System keychain via Tauri |
+| API key storage | System keychain via `keyring` crate v3 (used directly in Rust, no Tauri plugin) |
 | AI provider | User-provided key — Anthropic or OpenAI (switchable in settings) |
 | Background sync | Tauri Rust commands (polling integrations) |
 
