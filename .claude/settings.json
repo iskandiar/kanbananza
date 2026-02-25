@@ -1,4 +1,11 @@
 {
   "model": "opusplan",
-  "effortLevel": "high"
+  "effortLevel": "high",
+  "permissions": {
+    "allow": [
+      "Bash(*)",
+      "Write(*)",
+      "Edit(*)"
+    ]
+  }
 }
