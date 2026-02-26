@@ -80,7 +80,11 @@
 
   <div
     class="flex flex-col gap-1.5 flex-1 min-h-[2rem]"
-    use:dndzone={{ items: localTasks, flipDurationMs: 150 }}
+    use:dndzone={{
+      items: localTasks,
+      flipDurationMs: 150,
+      dropTargetStyle: { outline: 'none', background: 'rgba(99, 102, 241, 0.07)', 'border-radius': '6px' }
+    }}
     onconsider={handleDndConsider}
     onfinalize={handleDndFinalize}
   >

@@ -1,5 +1,6 @@
 <script lang="ts">
-  import type { Card, MeetingMetadata } from '$lib/types';
+  import type { Card, Impact } from '$lib/types';
+  import { boardStore } from '$lib/stores/board.svelte';
 
   let { card, onMarkDone }: { card: Card; onMarkDone: (id: number) => void } = $props();
 
@@ -20,14 +21,50 @@
   const meetingTime = $derived.by(() => {
     if (card.card_type !== 'meeting' || !card.metadata) return null;
     try {
-      const m = JSON.parse(card.metadata) as MeetingMetadata;
+      const m = JSON.parse(card.metadata) as { start_time: string; end_time: string };
       return new Date(m.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     } catch { return null; }
   });
+
+  // Editing state
+  let isEditing = $state(false);
+  let editTitle = $state('');
+  let editImpact = $state('');
+  let editHours = $state('');
+  let editUrl = $state('');
+
+  function startEdit() {
+    editTitle = card.title;
+    editImpact = card.impact ?? '';
+    editHours = card.time_estimate != null ? String(card.time_estimate) : '';
+    editUrl = card.url ?? '';
+    isEditing = true;
+  }
+
+  function cancelEdit() {
+    isEditing = false;
+  }
+
+  async function saveEdit() {
+    await boardStore.updateCard(card.id, {
+      title: editTitle,
+      ...(editImpact ? { impact: editImpact as Impact } : {}),
+      ...(editHours !== '' ? { timeEstimate: Number(editHours) } : {}),
+      ...(editUrl ? { url: editUrl } : {})
+    });
+    isEditing = false;
+  }
+
+  function focus(node: HTMLElement) {
+    node.focus();
+  }
 </script>
 
 <div
-  class="group rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 cursor-grab active:cursor-grabbing hover:border-indigo-500/40 transition-colors"
+  class="group rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 hover:border-indigo-500/40 transition-colors"
+  class:cursor-grab={!isEditing}
+  class:active:cursor-grabbing={!isEditing}
+  class:cursor-default={isEditing}
   class:opacity-50={card.status === 'done'}
 >
   {#if meetingTime}
@@ -51,14 +88,75 @@
           onclick={(e) => e.stopPropagation()}
         >↗</a>
       {/if}
-      {#if card.status !== 'done'}
+      {#if !isEditing}
         <button
-          onclick={() => onMarkDone(card.id)}
-          class="text-xs text-[var(--color-muted)] hover:text-emerald-400 transition-colors"
-          aria-label="Mark done"
-          title="Mark done"
-        >✓</button>
+          onclick={startEdit}
+          class="text-xs text-[var(--color-muted)] hover:text-indigo-400 transition-colors"
+          aria-label="Edit card"
+          title="Edit card"
+        >✎</button>
+        {#if card.status !== 'done'}
+          <button
+            onclick={() => onMarkDone(card.id)}
+            class="text-xs text-[var(--color-muted)] hover:text-emerald-400 transition-colors"
+            aria-label="Mark done"
+            title="Mark done"
+          >✓</button>
+        {/if}
       {/if}
     </div>
   </div>
+
+  {#if isEditing}
+    <form
+      data-no-dnd="true"
+      class="mt-2 flex flex-col gap-1.5"
+      onsubmit={(e) => { e.preventDefault(); saveEdit(); }}
+    >
+      <input
+        type="text"
+        bind:value={editTitle}
+        use:focus
+        class="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded px-2 py-1 text-xs text-[var(--color-text)] focus:outline-none focus:ring-1 focus:ring-indigo-500"
+        onkeydown={(e) => { if (e.key === 'Escape') cancelEdit(); }}
+      />
+      <select
+        bind:value={editImpact}
+        class="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded px-2 py-1 text-xs text-[var(--color-text)] focus:outline-none focus:ring-1 focus:ring-indigo-500"
+        onkeydown={(e) => { if (e.key === 'Escape') cancelEdit(); }}
+      >
+        <option value="">— impact</option>
+        <option value="low">low</option>
+        <option value="mid">mid</option>
+        <option value="high">high</option>
+      </select>
+      <input
+        type="number"
+        bind:value={editHours}
+        step="0.5"
+        min="0"
+        placeholder="hours"
+        class="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded px-2 py-1 text-xs text-[var(--color-text)] focus:outline-none focus:ring-1 focus:ring-indigo-500"
+        onkeydown={(e) => { if (e.key === 'Escape') cancelEdit(); }}
+      />
+      <input
+        type="text"
+        bind:value={editUrl}
+        placeholder="https://…"
+        class="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded px-2 py-1 text-xs text-[var(--color-text)] focus:outline-none focus:ring-1 focus:ring-indigo-500"
+        onkeydown={(e) => { if (e.key === 'Escape') cancelEdit(); }}
+      />
+      <div class="flex gap-1.5">
+        <button
+          type="submit"
+          class="flex-1 text-xs py-1 rounded bg-indigo-600/80 hover:bg-indigo-600 text-white transition-colors"
+        >Save</button>
+        <button
+          type="button"
+          onclick={cancelEdit}
+          class="flex-1 text-xs py-1 rounded border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] transition-colors"
+        >Cancel</button>
+      </div>
+    </form>
+  {/if}
 </div>

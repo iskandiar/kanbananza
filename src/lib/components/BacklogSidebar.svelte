@@ -37,26 +37,37 @@
   }
 </script>
 
-{#if isOpen}
-  <aside class="w-72 flex-shrink-0 border-l border-[var(--color-border)] flex flex-col bg-[var(--color-background)]">
-    <div class="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border)]">
-      <span class="text-sm font-medium text-[var(--color-text)]">Backlog ({cards.length})</span>
-      <button
-        onclick={onClose}
-        class="text-[var(--color-muted)] hover:text-[var(--color-text)] transition-colors text-lg leading-none"
-        aria-label="Close backlog"
-      >×</button>
-    </div>
-    <div
-      class="flex flex-col gap-2 p-3 overflow-y-auto flex-1 min-h-[2rem]"
-      use:dndzone={{ items: localCards, flipDurationMs: 150 }}
-      onconsider={handleDndConsider}
-      onfinalize={handleDndFinalize}
-    >
-      <QuickAdd onAdd={onAddCard} />
-      {#each localCards as card (card.id)}
-        <CardComponent {card} {onMarkDone} />
-      {/each}
-    </div>
-  </aside>
-{/if}
+<aside
+  class="flex-shrink-0 flex flex-col bg-[var(--color-background)] overflow-hidden transition-[width] duration-200"
+  class:border-l={isOpen}
+  class:border-[var(--color-border)]={isOpen}
+  style:width={isOpen ? '18rem' : '0'}
+>
+  <div class="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border)]">
+    <span class="text-sm font-medium text-[var(--color-text)]">Backlog ({cards.length})</span>
+    <button
+      onclick={onClose}
+      class="text-[var(--color-muted)] hover:text-[var(--color-text)] transition-colors text-lg leading-none"
+      aria-label="Close backlog"
+    >×</button>
+  </div>
+
+  {#if isOpen}
+    <QuickAdd onAdd={onAddCard} />
+  {/if}
+
+  <div
+    class="flex flex-col gap-2 p-3 overflow-y-auto flex-1 min-h-[2rem]"
+    use:dndzone={{
+      items: localCards,
+      flipDurationMs: 150,
+      dropTargetStyle: { outline: 'none', background: 'rgba(99, 102, 241, 0.07)', 'border-radius': '6px' }
+    }}
+    onconsider={handleDndConsider}
+    onfinalize={handleDndFinalize}
+  >
+    {#each localCards as card (card.id)}
+      <CardComponent {card} {onMarkDone} />
+    {/each}
+  </div>
+</aside>

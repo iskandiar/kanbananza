@@ -100,6 +100,11 @@ class BoardStore {
     this.cards = this.cards.map((c) => (c.id === cardId ? card : c));
   }
 
+  async updateCard(cardId: number, fields: Parameters<typeof cardsApi.updateCard>[1]) {
+    const card = await cardsApi.updateCard(cardId, fields);
+    this.cards = this.cards.map((c) => (c.id === cardId ? card : c));
+  }
+
   async markDone(cardId: number) {
     const card = await cardsApi.updateCard(cardId, { status: 'done' });
     this.cards = this.cards.map((c) => (c.id === cardId ? card : c));
