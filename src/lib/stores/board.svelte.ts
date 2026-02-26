@@ -1,4 +1,4 @@
-import type { Card, Week } from '$lib/types';
+import type { Card, CardType, Week } from '$lib/types';
 import * as cardsApi from '$lib/api/cards';
 import * as weeksApi from '$lib/api/weeks';
 
@@ -83,13 +83,20 @@ class BoardStore {
     }
   }
 
-  async addCard(title: string, weekId: number | null, dayOfWeek: number | null, cardType = 'task') {
+  async addCard(title: string, weekId: number | null, dayOfWeek: number | null, cardType: CardType = 'task') {
     const card = await cardsApi.createCard(title, cardType, weekId, dayOfWeek);
     this.cards = [...this.cards, card];
   }
 
   async moveCard(cardId: number, weekId: number | null, dayOfWeek: number | null, position: number) {
-    const card = await cardsApi.updateCard(cardId, { weekId, dayOfWeek, position });
+    const fields: Parameters<typeof cardsApi.updateCard>[1] = { position };
+    if (weekId === null && dayOfWeek === null) {
+      fields.clearWeek = true; // move to backlog — explicitly null both placement fields
+    } else {
+      if (weekId !== null) fields.weekId = weekId;
+      if (dayOfWeek !== null) fields.dayOfWeek = dayOfWeek;
+    }
+    const card = await cardsApi.updateCard(cardId, fields);
     this.cards = this.cards.map((c) => (c.id === cardId ? card : c));
   }
 

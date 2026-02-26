@@ -1,5 +1,6 @@
 use crate::db::DbState;
 use crate::types::{Card, CardStatus, CardType, Source};
+use rusqlite::types::Value;
 use tauri::State;
 
 fn row_to_card(row: &rusqlite::Row) -> rusqlite::Result<Card> {
@@ -28,12 +29,20 @@ fn row_to_card(row: &rusqlite::Row) -> rusqlite::Result<Card> {
     })
 }
 
+const SELECT: &str = "SELECT id,title,card_type,status,impact,time_estimate,url,week_id,day_of_week,position,source,external_id,notes,metadata,created_at,updated_at FROM cards";
+
 #[tauri::command]
 pub fn list_cards_by_week(week_id: Option<i64>, state: State<DbState>) -> Result<Vec<Card>, String> {
     let db = state.0.lock().map_err(|e| e.to_string())?;
     let (sql, params): (&str, Box<dyn rusqlite::types::ToSql>) = match week_id {
-        Some(id) => ("SELECT id,title,card_type,status,impact,time_estimate,url,week_id,day_of_week,position,source,external_id,notes,metadata,created_at,updated_at FROM cards WHERE week_id=? ORDER BY day_of_week,position", Box::new(id)),
-        None => ("SELECT id,title,card_type,status,impact,time_estimate,url,week_id,day_of_week,position,source,external_id,notes,metadata,created_at,updated_at FROM cards WHERE week_id IS NULL ORDER BY position", Box::new(rusqlite::types::Null)),
+        Some(id) => (
+            &format!("{SELECT} WHERE week_id=? ORDER BY day_of_week,position"),
+            Box::new(id),
+        ),
+        None => (
+            &format!("{SELECT} WHERE week_id IS NULL ORDER BY position"),
+            Box::new(rusqlite::types::Null),
+        ),
     };
     let mut stmt = db.prepare(sql).map_err(|e| e.to_string())?;
     let cards = stmt
@@ -47,7 +56,7 @@ pub fn list_cards_by_week(week_id: Option<i64>, state: State<DbState>) -> Result
 #[tauri::command]
 pub fn create_card(
     title: String,
-    card_type: String,
+    card_type: CardType, // validated enum — rejects unknown types at the boundary
     week_id: Option<i64>,
     day_of_week: Option<i64>,
     state: State<DbState>,
@@ -59,21 +68,21 @@ pub fn create_card(
             rusqlite::params![week_id, day_of_week],
             |r| r.get(0),
         )
-        .unwrap_or(0);
+        .map_err(|e| e.to_string())?;
+    // Serialize enum to the DB string value ("task", "meeting", etc.)
+    let card_type_str = serde_json::to_value(&card_type)
+        .map_err(|e| e.to_string())?
+        .as_str()
+        .unwrap_or("task")
+        .to_string();
     db.execute(
         "INSERT INTO cards (title,card_type,week_id,day_of_week,position) VALUES (?,?,?,?,?)",
-        rusqlite::params![title, card_type, week_id, day_of_week, position],
+        rusqlite::params![title, card_type_str, week_id, day_of_week, position],
     )
     .map_err(|e| e.to_string())?;
     let id = db.last_insert_rowid();
-    let card = db
-        .query_row(
-            "SELECT id,title,card_type,status,impact,time_estimate,url,week_id,day_of_week,position,source,external_id,notes,metadata,created_at,updated_at FROM cards WHERE id=?",
-            [id],
-            row_to_card,
-        )
-        .map_err(|e| e.to_string())?;
-    Ok(card)
+    db.query_row(&format!("{SELECT} WHERE id=?"), [id], row_to_card)
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -84,30 +93,48 @@ pub fn update_card(
     impact: Option<String>,
     time_estimate: Option<f64>,
     url: Option<String>,
-    day_of_week: Option<i64>,
     week_id: Option<i64>,
+    day_of_week: Option<i64>,
     position: Option<i64>,
     notes: Option<String>,
+    // When true, sets week_id=NULL and day_of_week=NULL (move to backlog).
+    // Needed because JSON null and absent field both deserialize to Option::None.
+    clear_week: Option<bool>,
     state: State<DbState>,
 ) -> Result<Card, String> {
     let db = state.0.lock().map_err(|e| e.to_string())?;
-    if let Some(v) = title { db.execute("UPDATE cards SET title=?,updated_at=datetime('now') WHERE id=?", rusqlite::params![v, id]).map_err(|e| e.to_string())?; }
-    if let Some(v) = status { db.execute("UPDATE cards SET status=?,updated_at=datetime('now') WHERE id=?", rusqlite::params![v, id]).map_err(|e| e.to_string())?; }
-    if let Some(v) = impact { db.execute("UPDATE cards SET impact=?,updated_at=datetime('now') WHERE id=?", rusqlite::params![v, id]).map_err(|e| e.to_string())?; }
-    if let Some(v) = time_estimate { db.execute("UPDATE cards SET time_estimate=?,updated_at=datetime('now') WHERE id=?", rusqlite::params![v, id]).map_err(|e| e.to_string())?; }
-    if let Some(v) = url { db.execute("UPDATE cards SET url=?,updated_at=datetime('now') WHERE id=?", rusqlite::params![v, id]).map_err(|e| e.to_string())?; }
-    if let Some(v) = day_of_week { db.execute("UPDATE cards SET day_of_week=?,updated_at=datetime('now') WHERE id=?", rusqlite::params![v, id]).map_err(|e| e.to_string())?; }
-    if let Some(v) = week_id { db.execute("UPDATE cards SET week_id=?,updated_at=datetime('now') WHERE id=?", rusqlite::params![v, id]).map_err(|e| e.to_string())?; }
-    if let Some(v) = position { db.execute("UPDATE cards SET position=?,updated_at=datetime('now') WHERE id=?", rusqlite::params![v, id]).map_err(|e| e.to_string())?; }
-    if let Some(v) = notes { db.execute("UPDATE cards SET notes=?,updated_at=datetime('now') WHERE id=?", rusqlite::params![v, id]).map_err(|e| e.to_string())?; }
-    let card = db
-        .query_row(
-            "SELECT id,title,card_type,status,impact,time_estimate,url,week_id,day_of_week,position,source,external_id,notes,metadata,created_at,updated_at FROM cards WHERE id=?",
-            [id],
-            row_to_card,
-        )
-        .map_err(|e| e.to_string())?;
-    Ok(card)
+
+    let mut parts: Vec<String> = Vec::new();
+    let mut vals: Vec<Value> = Vec::new();
+
+    if let Some(v) = title        { parts.push("title=?".into());         vals.push(Value::Text(v)); }
+    if let Some(v) = status       { parts.push("status=?".into());        vals.push(Value::Text(v)); }
+    if let Some(v) = impact       { parts.push("impact=?".into());        vals.push(Value::Text(v)); }
+    if let Some(v) = time_estimate { parts.push("time_estimate=?".into()); vals.push(Value::Real(v)); }
+    if let Some(v) = url          { parts.push("url=?".into());           vals.push(Value::Text(v)); }
+    if let Some(v) = position     { parts.push("position=?".into());      vals.push(Value::Integer(v)); }
+    if let Some(v) = notes        { parts.push("notes=?".into());         vals.push(Value::Text(v)); }
+
+    if clear_week == Some(true) {
+        // Embed NULLs directly — no placeholder needed
+        parts.push("week_id=NULL".into());
+        parts.push("day_of_week=NULL".into());
+    } else {
+        if let Some(v) = week_id    { parts.push("week_id=?".into());    vals.push(Value::Integer(v)); }
+        if let Some(v) = day_of_week { parts.push("day_of_week=?".into()); vals.push(Value::Integer(v)); }
+    }
+
+    if !parts.is_empty() {
+        parts.push("updated_at=datetime('now')".into());
+        let sql = format!("UPDATE cards SET {} WHERE id=?", parts.join(","));
+        vals.push(Value::Integer(id));
+        // Single statement — atomically updates all fields at once
+        db.execute(&sql, rusqlite::params_from_iter(vals.into_iter()))
+            .map_err(|e| e.to_string())?;
+    }
+
+    db.query_row(&format!("{SELECT} WHERE id=?"), [id], row_to_card)
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]

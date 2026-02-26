@@ -1,12 +1,12 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { Card } from '$lib/types';
+import type { Card, CardType } from '$lib/types';
 
 export const listCardsByWeek = (weekId: number | null): Promise<Card[]> =>
   invoke('list_cards_by_week', { weekId });
 
 export const createCard = (
   title: string,
-  cardType: string,
+  cardType: CardType,
   weekId: number | null,
   dayOfWeek: number | null
 ): Promise<Card> => invoke('create_card', { title, cardType, weekId, dayOfWeek });
@@ -19,10 +19,11 @@ export const updateCard = (
     impact?: string;
     timeEstimate?: number;
     url?: string;
-    dayOfWeek?: number | null;
-    weekId?: number | null;
+    weekId?: number;
+    dayOfWeek?: number;
     position?: number;
     notes?: string;
+    clearWeek?: boolean; // set week_id=NULL and day_of_week=NULL (move to backlog)
   }
 ): Promise<Card> => invoke('update_card', { id, ...fields });
 
