@@ -57,9 +57,11 @@ pub async fn sync_events(db_state: &DbState) -> Result<usize, String> {
         // Lock released here, before the next HTTP call.
     }
 
-    // Step 5: update last_synced_at in the integrations table.
+    // Step 5: reorder all synced calendar cards by start_time within each day,
+    // then update last_synced_at.
     {
         let db = db_state.0.lock().map_err(|e| e.to_string())?;
+        reorder_calendar_events(&db)?;
         db.execute(
             "UPDATE integrations SET last_synced_at=datetime('now') WHERE id='calendar'",
             [],
@@ -136,6 +138,13 @@ fn upsert_event(event: &GCalEvent, db: &Connection) -> Result<bool, String> {
     })
     .to_string();
 
+    // Compute duration in hours for time_estimate (e.g. 0.5 for a 30-min meeting).
+    let time_estimate: Option<f64> = event.end.date_time.as_deref().and_then(|end_iso| {
+        let end: DateTime<Utc> = end_iso.parse().ok()?;
+        let mins = (end - start).num_minutes();
+        if mins > 0 { Some(mins as f64 / 60.0) } else { None }
+    });
+
     let existing_id: Option<i64> = db
         .query_row(
             "SELECT id FROM cards WHERE external_id = ? AND source = 'calendar'",
@@ -148,19 +157,44 @@ fn upsert_event(event: &GCalEvent, db: &Connection) -> Result<bool, String> {
     if let Some(card_id) = existing_id {
         db.execute(
             "UPDATE cards SET title = ?, metadata = ?, day_of_week = ?, week_id = ?, \
-             updated_at = datetime('now') WHERE id = ?",
-            rusqlite::params![title, metadata, day_of_week, week_id, card_id],
+             time_estimate = ?, updated_at = datetime('now') WHERE id = ?",
+            rusqlite::params![title, metadata, day_of_week, week_id, time_estimate, card_id],
         )
         .map_err(|e| e.to_string())?;
     } else {
         db.execute(
             "INSERT INTO cards \
-             (title, card_type, status, source, external_id, metadata, week_id, day_of_week, position) \
-             VALUES (?, 'meeting', 'planned', 'calendar', ?, ?, ?, ?, 0)",
-            rusqlite::params![title, event.id, metadata, week_id, day_of_week],
+             (title, card_type, status, source, external_id, metadata, week_id, day_of_week, \
+              position, time_estimate) \
+             VALUES (?, 'meeting', 'planned', 'calendar', ?, ?, ?, ?, 0, ?)",
+            rusqlite::params![title, event.id, metadata, week_id, day_of_week, time_estimate],
         )
         .map_err(|e| e.to_string())?;
     }
 
     Ok(true)
+}
+
+/// Assigns `position` values to all calendar cards so that within each
+/// (week_id, day_of_week) group they appear in chronological order.
+///
+/// Position = number of other calendar cards on the same day whose
+/// `start_time` is strictly earlier — giving 0-indexed ordering.
+fn reorder_calendar_events(db: &Connection) -> Result<(), String> {
+    db.execute(
+        "UPDATE cards SET position = (
+            SELECT COUNT(*) FROM cards c2
+            WHERE c2.source = 'calendar'
+              AND c2.week_id = cards.week_id
+              AND c2.day_of_week = cards.day_of_week
+              AND json_extract(c2.metadata, '$.start_time')
+                < json_extract(cards.metadata, '$.start_time')
+        )
+        WHERE source = 'calendar'
+          AND week_id IS NOT NULL
+          AND day_of_week IS NOT NULL",
+        [],
+    )
+    .map_err(|e| format!("failed to reorder calendar events: {e}"))?;
+    Ok(())
 }
