@@ -197,3 +197,45 @@ pub async fn get_calendar_status(state: State<'_, DbState>) -> Result<bool, Stri
     let db = state.0.lock().map_err(|e| e.to_string())?;
     Ok(calendar::is_connected(&db))
 }
+
+// ---------------------------------------------------------------------------
+// GitLab integration commands
+// ---------------------------------------------------------------------------
+
+use crate::integrations::gitlab;
+
+/// Fetches open MRs (authored by user + assigned for review) from GitLab
+/// and upserts them as `mr` cards in the local backlog.
+/// Auto-marks merged/closed MRs as Done.
+/// Emits `"gitlab://synced"` with { count, error } on completion.
+#[tauri::command]
+pub async fn sync_gitlab(
+    state: State<'_, DbState>,
+    app: AppHandle,
+) -> Result<(), String> {
+    match gitlab::sync_mrs(&state).await {
+        Ok(count) => {
+            app.emit("gitlab://synced", SyncResult { count, error: None })
+                .map_err(|e| e.to_string())?;
+            Ok(())
+        }
+        Err(e) => {
+            let _ = app.emit(
+                "gitlab://synced",
+                SyncResult { count: 0, error: Some(e.clone()) },
+            );
+            Err(e)
+        }
+    }
+}
+
+/// Removes the GitLab PAT from local storage and clears the integrations row.
+#[tauri::command]
+pub async fn disconnect_gitlab(state: State<'_, DbState>) -> Result<(), String> {
+    let db = state.0.lock().map_err(|e| e.to_string())?;
+    db.execute("DELETE FROM secrets WHERE key = 'gitlab_pat'", [])
+        .map_err(|e| e.to_string())?;
+    db.execute("DELETE FROM integrations WHERE id='gitlab'", [])
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}

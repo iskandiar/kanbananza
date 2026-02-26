@@ -5,7 +5,7 @@ pub mod types;
 
 use commands::{
     cards::*,
-    integrations::{disconnect_calendar, get_calendar_auth_url, get_calendar_status, sync_calendar},
+    integrations::{disconnect_calendar, disconnect_gitlab, get_calendar_auth_url, get_calendar_status, sync_calendar, sync_gitlab},
     keychain::*,
     rollover::*,
     settings::*,
@@ -114,6 +114,9 @@ pub fn run() {
             sync_calendar,
             disconnect_calendar,
             get_calendar_status,
+            // GitLab integration
+            sync_gitlab,
+            disconnect_gitlab,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application")

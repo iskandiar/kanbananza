@@ -27,6 +27,7 @@ class BoardStore {
   isLoading = $state(false);
   error = $state<string | null>(null);
   private _calendarUnlisten: (() => void) | null = null;
+  private _gitlabUnlisten: (() => void) | null = null;
 
   // Cards with no week assigned — the global backlog
   backlog = $derived(this.cards.filter((c) => c.week_id === null).sort((a, b) => a.position - b.position));
@@ -81,6 +82,12 @@ class BoardStore {
     if (!this._calendarUnlisten) {
       listen<null>('calendar://synced', () => this._loadCards()).then(fn => {
         this._calendarUnlisten = fn;
+      });
+    }
+
+    if (!this._gitlabUnlisten) {
+      listen<null>('gitlab://synced', () => this._loadCards()).then(fn => {
+        this._gitlabUnlisten = fn;
       });
     }
   }

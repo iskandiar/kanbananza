@@ -40,3 +40,8 @@ CREATE TABLE IF NOT EXISTS integrations (
     config TEXT,
     last_synced_at TEXT
 );
+
+CREATE TABLE IF NOT EXISTS secrets (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);

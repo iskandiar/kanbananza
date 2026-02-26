@@ -80,9 +80,52 @@
     calendarSyncMessage = null;
   }
 
+  // --- GitLab integration state ---
+  let gitlabConnected = $state(false);
+  let gitlabEditingPat = $state(false);
+  let gitlabPatInput = $state('');
+  let gitlabPatSaved = $state(false);
+  let gitlabSyncing = $state(false);
+  let gitlabError = $state<string | null>(null);
+  let gitlabSyncMessage = $state<string | null>(null);
+  let unlistenGitlabSynced: (() => void) | null = null;
+
+  async function saveGitlabPat() {
+    if (!gitlabPatInput.trim()) return;
+    try {
+      await storeSecret('kanbananza', 'gitlab_pat', gitlabPatInput.trim());
+      gitlabConnected = true;
+      gitlabEditingPat = false;
+      gitlabPatInput = '';
+      gitlabPatSaved = true;
+      setTimeout(() => { gitlabPatSaved = false; }, 1500);
+    } catch (e) {
+      gitlabError = `Failed to save PAT: ${String(e)}`;
+    }
+  }
+
+  async function syncGitlab() {
+    gitlabError = null;
+    gitlabSyncMessage = null;
+    gitlabSyncing = true;
+    try {
+      await invoke('sync_gitlab');
+    } catch (e) {
+      gitlabError = String(e);
+    } finally {
+      gitlabSyncing = false;
+    }
+  }
+
+  async function disconnectGitlab() {
+    await invoke('disconnect_gitlab');
+    gitlabConnected = false;
+    gitlabError = null;
+    gitlabSyncMessage = null;
+  }
+
   // --- Integrations list ---
   const integrations = [
-    { id: 'gitlab',   name: 'GitLab',          description: 'Import open MRs',          status: 'coming_soon' as const },
     { id: 'linear',   name: 'Linear',           description: 'Import assigned issues',   status: 'coming_soon' as const },
     { id: 'slack',    name: 'Slack',            description: 'Import threads',           status: 'coming_soon' as const },
     { id: 'notion',   name: 'Notion',           description: 'Import action items',      status: 'coming_soon' as const },
@@ -100,6 +143,18 @@
     await loadKeyStatus(selectedProvider);
 
     calendarConnected = await invoke<boolean>('get_calendar_status');
+    gitlabConnected = (await getSecret('kanbananza', 'gitlab_pat')) !== null;
+
+    unlistenGitlabSynced = await listen<{ count: number; error: string | null }>('gitlab://synced', (event) => {
+      gitlabSyncing = false;
+      if (event.payload.error) {
+        gitlabError = event.payload.error;
+        gitlabSyncMessage = null;
+      } else {
+        gitlabError = null;
+        gitlabSyncMessage = `Synced ${event.payload.count} MR${event.payload.count === 1 ? '' : 's'}`;
+      }
+    });
 
     // OAuth flow completed — Rust side already triggers the first sync
     unlistenConnected = await listen('calendar://connected', () => {
@@ -128,6 +183,7 @@
     unlistenConnected?.();
     unlistenSynced?.();
     unlistenError?.();
+    unlistenGitlabSynced?.();
   });
 </script>
 
@@ -255,6 +311,90 @@
         {/if}
         {#if calendarError}
           <p class="text-xs text-red-400/90 py-2 border-b border-[var(--color-border)]">{calendarError}</p>
+        {/if}
+
+        <!-- GitLab -->
+        <IntegrationCard
+          name="GitLab"
+          description="Import open and review MRs"
+          status={gitlabConnected ? 'connected' : 'not_connected'}
+          onConnect={() => { gitlabPatInput = ''; }}
+        />
+        {#if !gitlabConnected}
+          <div class="flex items-center gap-2 px-0 py-2 border-b border-[var(--color-border)]">
+            <input
+              type="password"
+              bind:value={gitlabPatInput}
+              placeholder="glpat-…"
+              class="flex-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded px-3 py-1.5 text-sm text-[var(--color-text)] placeholder:text-[var(--color-muted)] focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              onkeydown={(e) => { if (e.key === 'Enter') saveGitlabPat(); }}
+            />
+            <button
+              onclick={saveGitlabPat}
+              disabled={!gitlabPatInput.trim()}
+              class="px-3 py-1.5 rounded bg-indigo-600/80 hover:bg-indigo-600 disabled:opacity-40 disabled:cursor-not-allowed text-sm text-white transition-colors"
+            >
+              Save
+            </button>
+            {#if gitlabPatSaved}
+              <span class="text-xs text-emerald-500">Saved</span>
+            {/if}
+          </div>
+        {/if}
+        {#if gitlabConnected && !gitlabEditingPat}
+          <div class="flex items-center gap-4 px-0 py-2 border-b border-[var(--color-border)]">
+            <button
+              onclick={syncGitlab}
+              disabled={gitlabSyncing}
+              class="text-xs px-2.5 py-1 rounded border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-text)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              {gitlabSyncing ? 'Syncing…' : 'Sync now'}
+            </button>
+            {#if gitlabSyncMessage}
+              <span class="text-xs text-emerald-500/80">{gitlabSyncMessage}</span>
+            {/if}
+            <div class="flex items-center gap-3 ml-auto">
+              <button
+                onclick={() => { gitlabEditingPat = true; gitlabError = null; gitlabSyncMessage = null; }}
+                class="text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors"
+              >
+                Replace key
+              </button>
+              <button
+                onclick={disconnectGitlab}
+                class="text-xs text-red-400/70 hover:text-red-400 transition-colors"
+              >
+                Disconnect
+              </button>
+            </div>
+          </div>
+        {/if}
+        {#if gitlabEditingPat}
+          <div class="flex items-center gap-2 px-0 py-2 border-b border-[var(--color-border)]">
+            <input
+              type="password"
+              bind:value={gitlabPatInput}
+              placeholder="glpat-…"
+              class="flex-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded px-3 py-1.5 text-sm text-[var(--color-text)] placeholder:text-[var(--color-muted)] focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              onkeydown={(e) => { if (e.key === 'Enter') saveGitlabPat(); if (e.key === 'Escape') { gitlabEditingPat = false; gitlabPatInput = ''; } }}
+            />
+            <button
+              onclick={saveGitlabPat}
+              disabled={!gitlabPatInput.trim()}
+              class="px-3 py-1.5 rounded bg-indigo-600/80 hover:bg-indigo-600 disabled:opacity-40 disabled:cursor-not-allowed text-sm text-white transition-colors"
+            >
+              Save
+            </button>
+            <button
+              onclick={() => { gitlabEditingPat = false; gitlabPatInput = ''; }}
+              class="text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        {/if}
+        {#if gitlabError}
+          <p class="text-xs text-red-400/90 py-2 border-b border-[var(--color-border)]">{gitlabError}</p>
         {/if}
 
         <!-- Other integrations — coming soon -->
