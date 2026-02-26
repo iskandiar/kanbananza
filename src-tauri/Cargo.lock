@@ -1848,6 +1848,7 @@ dependencies = [
  "base64 0.22.1",
  "chrono",
  "keyring",
+ "log",
  "open",
  "rand 0.8.5",
  "reqwest 0.12.28",
@@ -1859,6 +1860,7 @@ dependencies = [
  "tauri-build",
  "tauri-plugin-deep-link",
  "tauri-plugin-sql",
+ "tokio",
  "url",
 ]
 

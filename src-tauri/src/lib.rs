@@ -5,9 +5,7 @@ pub mod types;
 
 use commands::{
     cards::*,
-    integrations::{
-        disconnect_calendar, get_calendar_auth_url, get_calendar_status, sync_calendar, PkceState,
-    },
+    integrations::{disconnect_calendar, get_calendar_auth_url, get_calendar_status, sync_calendar},
     keychain::*,
     rollover::*,
     settings::*,
@@ -17,7 +15,6 @@ use db::DbState;
 use rusqlite::Connection;
 use std::sync::Mutex;
 use tauri::{Emitter, Manager};
-use tauri_plugin_deep_link::DeepLinkExt;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -38,123 +35,8 @@ pub fn run() {
                 .expect("failed to run migrations");
             app.manage(DbState(Mutex::new(conn)));
 
-            // ---------------------------------------------------------------
-            // PKCE state (shared between auth-URL generation and deep-link
-            // callback)
-            // ---------------------------------------------------------------
-            app.manage(PkceState(Mutex::new(None)));
-
-            // ---------------------------------------------------------------
-            // Deep-link handler — receives kanbananza://auth?code=...
-            // ---------------------------------------------------------------
-            let deep_link_app = app.handle().clone();
-            app.deep_link()
-                .on_open_url(move |event: tauri_plugin_deep_link::OpenUrlEvent| {
-                    for raw_url in event.urls() {
-                        let url_str = raw_url.as_str();
-
-                        // Parse the URL and extract the `code` query parameter.
-                        let parsed = match url::Url::parse(url_str) {
-                            Ok(u) => u,
-                            Err(e) => {
-                                eprintln!("[deep-link] failed to parse URL '{url_str}': {e}");
-                                continue;
-                            }
-                        };
-
-                        let code = parsed
-                            .query_pairs()
-                            .find(|(k, _)| k == "code")
-                            .map(|(_, v)| v.into_owned());
-
-                        let code = match code {
-                            Some(c) => c,
-                            None => {
-                                eprintln!("[deep-link] no 'code' param in URL '{url_str}'");
-                                continue;
-                            }
-                        };
-
-                        // Retrieve and clear the stored PKCE verifier.
-                        let pkce_state = deep_link_app.state::<PkceState>();
-                        let verifier = {
-                            let mut guard = match pkce_state.0.lock() {
-                                Ok(g) => g,
-                                Err(e) => {
-                                    eprintln!("[deep-link] PkceState lock poisoned: {e}");
-                                    continue;
-                                }
-                            };
-                            guard.take()
-                        };
-
-                        let verifier = match verifier {
-                            Some(v) => v,
-                            None => {
-                                eprintln!(
-                                    "[deep-link] no PKCE verifier stored — ignoring callback"
-                                );
-                                continue;
-                            }
-                        };
-
-                        // Perform token exchange + initial sync on the async
-                        // runtime (deep-link callback is synchronous).
-                        let handle = deep_link_app.clone();
-                        tauri::async_runtime::spawn(async move {
-                            match integrations::calendar::exchange_code(&code, &verifier).await {
-                                Ok(()) => {
-                                    let _ = handle.emit("calendar://connected", ());
-
-                                    // Kick off an immediate sync for the current week.
-                                    let db_state = handle.state::<DbState>();
-                                    let week_info = {
-                                        match db_state.0.lock() {
-                                            Ok(guard) => guard
-                                                .query_row(
-                                                    "SELECT id, start_date FROM weeks \
-                                                     ORDER BY year DESC, week_number DESC LIMIT 1",
-                                                    [],
-                                                    |r| {
-                                                        Ok((
-                                                            r.get::<_, i64>(0)?,
-                                                            r.get::<_, String>(1)?,
-                                                        ))
-                                                    },
-                                                )
-                                                .ok(),
-                                            Err(e) => {
-                                                eprintln!("[deep-link] db lock error: {e}");
-                                                None
-                                            }
-                                        }
-                                        // guard dropped here — lock released before await
-                                    };
-
-                                    if let Some((week_id, start_date)) = week_info {
-                                        match integrations::calendar::sync_events(
-                                            &start_date,
-                                            week_id,
-                                            &db_state,
-                                        )
-                                        .await
-                                        {
-                                            Ok(_) => {
-                                                let _ = handle.emit("calendar://synced", ());
-                                            }
-                                            Err(e) => {
-                                                eprintln!("[deep-link] initial sync error: {e}");
-                                            }
-                                        }
-                                    }
-                                }
-                                Err(e) => {
-                                    eprintln!("[deep-link] token exchange failed: {e}");
-                                }
-                            }
-                        });
-                    }
-                });
+            // OAuth callback is handled via loopback TCP in get_calendar_auth_url —
+            // no deep-link handler needed.
 
             // ---------------------------------------------------------------
             // Background polling — sync once per hour when connected
@@ -168,11 +50,24 @@ pub fn run() {
                     .await
                     .ok();
 
-                    if !integrations::calendar::is_connected() {
+                    let db_state = poll_handle.state::<DbState>();
+
+                    // Check connection status with a short-lived lock.
+                    let is_conn = {
+                        match db_state.0.lock() {
+                            Ok(db) => integrations::calendar::is_connected(&db),
+                            Err(e) => {
+                                log::error!(
+                                    "[poll] db lock error checking connection: {e}"
+                                );
+                                false
+                            }
+                        }
+                    }; // lock released before await
+
+                    if !is_conn {
                         continue;
                     }
-
-                    let db_state = poll_handle.state::<DbState>();
 
                     // Fetch the most recent week metadata with a short-lived lock.
                     let week_info = {
@@ -186,7 +81,7 @@ pub fn run() {
                                 )
                                 .ok(),
                             Err(e) => {
-                                eprintln!("[poll] db lock error: {e}");
+                                log::error!("[poll] db lock error: {e}");
                                 None
                             }
                         }
@@ -201,10 +96,19 @@ pub fn run() {
                         )
                         .await
                         {
-                            Ok(_) => {
-                                let _ = poll_handle.emit("calendar://synced", ());
+                            Ok(count) => {
+                                let _ = poll_handle.emit(
+                                    "calendar://synced",
+                                    serde_json::json!({ "count": count, "error": null }),
+                                );
                             }
-                            Err(e) => eprintln!("[poll] sync error: {e}"),
+                            Err(e) => {
+                                log::error!("[poll] sync error: {e}");
+                                let _ = poll_handle.emit(
+                                    "calendar://synced",
+                                    serde_json::json!({ "count": 0, "error": e }),
+                                );
+                            }
                         }
                     }
                 }

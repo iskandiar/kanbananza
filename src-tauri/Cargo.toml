@@ -27,6 +27,8 @@ base64 = "0.22"
 rand = "0.8"
 url = "2"
 open = "5"
+tokio = { version = "1", features = ["net", "io-util"] }
+log = "0.4"
 
 [profile.release]
 codegen-units = 1

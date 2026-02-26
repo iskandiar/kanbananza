@@ -27,20 +27,80 @@ struct EventsResponse {
     items: Vec<GCalEvent>,
 }
 
-/// Fetches timed (non-all-day) calendar events from the user's primary
-/// calendar for the given time window.
+/// A calendar entry from the user's calendar list.
+#[derive(Deserialize)]
+pub struct GCalCalendar {
+    pub id: String,
+    pub summary: Option<String>,
+    pub selected: Option<bool>,
+    pub primary: Option<bool>,
+    /// "owner", "writer", "reader", or "freeBusyReader"
+    #[serde(rename = "accessRole")]
+    pub access_role: Option<String>,
+}
+
+/// Wraps the `items` array in a Google Calendar calendarList response.
+#[derive(Deserialize)]
+struct CalendarListResponse {
+    #[serde(default)]
+    items: Vec<GCalCalendar>,
+}
+
+/// Fetches the user's calendar list and returns all calendars where the user
+/// has at least reader access (i.e. `access_role != "freeBusyReader"`).
+pub async fn list_calendars(access_token: &str) -> Result<Vec<GCalCalendar>, String> {
+    let client = reqwest::Client::new();
+
+    let resp = client
+        .get("https://www.googleapis.com/calendar/v3/users/me/calendarList")
+        .bearer_auth(access_token)
+        .send()
+        .await
+        .map_err(|e| format!("calendarList fetch failed: {e}"))?;
+
+    let status = resp.status();
+    if !status.is_success() {
+        let text = resp.text().await.unwrap_or_default();
+        return Err(format!("calendarList API error {status}: {text}"));
+    }
+
+    let body: CalendarListResponse = resp
+        .json()
+        .await
+        .map_err(|e| format!("failed to parse calendarList response: {e}"))?;
+
+    let accessible: Vec<GCalCalendar> = body
+        .items
+        .into_iter()
+        .filter(|c| c.access_role.as_deref() != Some("freeBusyReader"))
+        .collect();
+
+    Ok(accessible)
+}
+
+/// Fetches timed (non-all-day) calendar events from the specified calendar
+/// for the given time window.
 ///
-/// `week_start` / `week_end` should be RFC 3339 strings such as
+/// `calendar_id` — the calendar identifier (e.g. `"primary"` or an email address).
+/// `week_start` / `week_end` — RFC 3339 strings such as
 /// `"2025-01-06T00:00:00Z"` and `"2025-01-10T23:59:59Z"`.
 pub async fn fetch_events(
     access_token: &str,
     week_start: &str,
     week_end: &str,
+    calendar_id: &str,
 ) -> Result<Vec<GCalEvent>, String> {
     let client = reqwest::Client::new();
 
+    // URL-encode the calendar_id in case it contains special characters (e.g. '@').
+    let encoded_id = url::form_urlencoded::byte_serialize(calendar_id.as_bytes())
+        .collect::<String>();
+    let url = format!(
+        "https://www.googleapis.com/calendar/v3/calendars/{encoded_id}/events"
+    );
+
     let resp = client
-        .get("https://www.googleapis.com/calendar/v3/calendars/primary/events")
+        .get(&url)
         .bearer_auth(access_token)
         .query(&[
             ("timeMin", week_start),
@@ -50,18 +110,20 @@ pub async fn fetch_events(
         ])
         .send()
         .await
-        .map_err(|e| format!("calendar fetch failed: {e}"))?;
+        .map_err(|e| format!("calendar fetch failed for '{calendar_id}': {e}"))?;
 
     let status = resp.status();
     if !status.is_success() {
         let text = resp.text().await.unwrap_or_default();
-        return Err(format!("calendar API error {status}: {text}"));
+        return Err(format!(
+            "calendar API error {status} for '{calendar_id}': {text}"
+        ));
     }
 
     let body: EventsResponse = resp
         .json()
         .await
-        .map_err(|e| format!("failed to parse calendar response: {e}"))?;
+        .map_err(|e| format!("failed to parse calendar response for '{calendar_id}': {e}"))?;
 
     // Only return timed events (skip all-day events which have no dateTime).
     let timed: Vec<GCalEvent> = body

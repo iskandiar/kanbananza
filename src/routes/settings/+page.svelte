@@ -51,23 +51,33 @@
   // --- Calendar integration state ---
   let calendarConnected = $state(false);
   let calendarSyncing = $state(false);
+  let calendarError = $state<string | null>(null);
+  let calendarSyncMessage = $state<string | null>(null);
 
   async function syncCalendar() {
+    calendarError = null;
+    calendarSyncMessage = null;
     calendarSyncing = true;
     try {
       await invoke('sync_calendar');
+    } catch (e) {
+      calendarError = String(e);
     } finally {
       calendarSyncing = false;
     }
   }
 
   async function connectCalendar() {
+    calendarError = null;
+    calendarSyncMessage = null;
     await invoke('get_calendar_auth_url');
   }
 
   async function disconnectCalendar() {
     await invoke('disconnect_calendar');
     calendarConnected = false;
+    calendarError = null;
+    calendarSyncMessage = null;
   }
 
   // --- Integrations list ---
@@ -79,7 +89,9 @@
   ];
 
   // --- Bootstrap ---
-  let unlistenCalendarConnected: (() => void) | null = null;
+  let unlistenConnected: (() => void) | null = null;
+  let unlistenSynced: (() => void) | null = null;
+  let unlistenError: (() => void) | null = null;
 
   onMount(async () => {
     await settingsStore.load();
@@ -89,14 +101,33 @@
 
     calendarConnected = await invoke<boolean>('get_calendar_status');
 
-    unlistenCalendarConnected = await listen('calendar://connected', async () => {
+    // OAuth flow completed — Rust side already triggers the first sync
+    unlistenConnected = await listen('calendar://connected', () => {
       calendarConnected = true;
-      await syncCalendar();
+    });
+
+    // Sync result (success or error) from any sync source
+    unlistenSynced = await listen<{ count: number; error: string | null }>('calendar://synced', (event) => {
+      calendarSyncing = false;
+      if (event.payload.error) {
+        calendarError = event.payload.error;
+        calendarSyncMessage = null;
+      } else {
+        calendarError = null;
+        calendarSyncMessage = `Synced ${event.payload.count} event${event.payload.count === 1 ? '' : 's'}`;
+      }
+    });
+
+    // OAuth or token-exchange errors
+    unlistenError = await listen<{ message: string }>('calendar://error', (event) => {
+      calendarError = event.payload.message;
     });
   });
 
   onDestroy(() => {
-    unlistenCalendarConnected?.();
+    unlistenConnected?.();
+    unlistenSynced?.();
+    unlistenError?.();
   });
 </script>
 
@@ -211,13 +242,19 @@
             >
               {calendarSyncing ? 'Syncing…' : 'Sync now'}
             </button>
+            {#if calendarSyncMessage}
+              <span class="text-xs text-emerald-500/80">{calendarSyncMessage}</span>
+            {/if}
             <button
               onclick={disconnectCalendar}
-              class="text-xs text-red-400/70 hover:text-red-400 transition-colors"
+              class="text-xs text-red-400/70 hover:text-red-400 transition-colors ml-auto"
             >
               Disconnect
             </button>
           </div>
+        {/if}
+        {#if calendarError}
+          <p class="text-xs text-red-400/90 py-2 border-b border-[var(--color-border)]">{calendarError}</p>
         {/if}
 
         <!-- Other integrations — coming soon -->

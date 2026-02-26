@@ -1,21 +1,16 @@
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-use keyring::Entry;
+use rusqlite::Connection;
 use sha2::{Digest, Sha256};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-const SERVICE: &str = "kanbananza";
+use crate::db::DbState;
+
 const CLIENT_ID: &str = env!("GCAL_CLIENT_ID");
 const CLIENT_SECRET: &str = env!("GCAL_CLIENT_SECRET");
-const REDIRECT_URI: &str = "kanbananza://auth";
 const SCOPE: &str = "https://www.googleapis.com/auth/calendar.readonly";
 const TOKEN_ENDPOINT: &str = "https://oauth2.googleapis.com/token";
 const AUTH_ENDPOINT: &str = "https://accounts.google.com/o/oauth2/v2/auth";
-
-// --- keychain key constants ---
-const KEY_ACCESS_TOKEN: &str = "calendar_access_token";
-const KEY_REFRESH_TOKEN: &str = "calendar_refresh_token";
-const KEY_TOKEN_EXPIRY: &str = "calendar_token_expiry";
 
 // ---------------------------------------------------------------------------
 // PKCE helpers
@@ -31,6 +26,18 @@ fn pkce_challenge(verifier: &str) -> String {
 }
 
 // ---------------------------------------------------------------------------
+// SQLite token storage helpers (private)
+// ---------------------------------------------------------------------------
+
+/// JSON shape stored in `integrations.config` for id='calendar'.
+#[derive(serde::Serialize, serde::Deserialize)]
+struct TokenConfig {
+    access_token: String,
+    refresh_token: String,
+    token_expiry: u64,
+}
+
+// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
@@ -38,12 +45,12 @@ fn pkce_challenge(verifier: &str) -> String {
 ///
 /// The caller is responsible for generating and persisting the `verifier`
 /// (64 random bytes encoded as base64url) between this call and
-/// [`exchange_code`].
-pub fn get_auth_url(verifier: &str) -> String {
+/// [`exchange_code_http`] + [`store_tokens`].
+pub fn get_auth_url(verifier: &str, redirect_uri: &str) -> String {
     let challenge = pkce_challenge(verifier);
     url::form_urlencoded::Serializer::new(format!("{AUTH_ENDPOINT}?"))
         .append_pair("client_id", CLIENT_ID)
-        .append_pair("redirect_uri", REDIRECT_URI)
+        .append_pair("redirect_uri", redirect_uri)
         .append_pair("response_type", "code")
         .append_pair("scope", SCOPE)
         .append_pair("access_type", "offline")
@@ -53,9 +60,17 @@ pub fn get_auth_url(verifier: &str) -> String {
         .finish()
 }
 
-/// Exchanges an authorization `code` for access + refresh tokens and stores
-/// them in the system keychain.
-pub async fn exchange_code(code: &str, verifier: &str) -> Result<(), String> {
+/// Exchanges an authorization `code` for tokens via HTTP only — no DB access.
+/// Returns `(access_token, refresh_token, expiry_unix_secs)`.
+///
+/// The caller must subsequently call [`store_tokens`] with the DB lock held
+/// to persist the tokens. Separating HTTP from DB means we never hold a
+/// `MutexGuard<Connection>` across an `.await`.
+pub async fn exchange_code_http(
+    code: &str,
+    verifier: &str,
+    redirect_uri: &str,
+) -> Result<(String, String, u64), String> {
     let client = reqwest::Client::new();
     let params = [
         ("client_id", CLIENT_ID),
@@ -63,7 +78,7 @@ pub async fn exchange_code(code: &str, verifier: &str) -> Result<(), String> {
         ("code", code),
         ("code_verifier", verifier),
         ("grant_type", "authorization_code"),
-        ("redirect_uri", REDIRECT_URI),
+        ("redirect_uri", redirect_uri),
     ];
 
     let resp = client
@@ -92,12 +107,14 @@ pub async fn exchange_code(code: &str, verifier: &str) -> Result<(), String> {
     let access_token = body
         .get("access_token")
         .and_then(|v| v.as_str())
-        .ok_or("missing access_token in response")?;
+        .ok_or("missing access_token in response")?
+        .to_string();
 
     let refresh_token = body
         .get("refresh_token")
         .and_then(|v| v.as_str())
-        .ok_or("missing refresh_token in response")?;
+        .ok_or("missing refresh_token in response")?
+        .to_string();
 
     let expires_in = body
         .get("expires_in")
@@ -108,23 +125,109 @@ pub async fn exchange_code(code: &str, verifier: &str) -> Result<(), String> {
         .duration_since(UNIX_EPOCH)
         .map_err(|e| e.to_string())?
         .as_secs();
-    let expiry = (now + expires_in).to_string();
+    let expiry = now + expires_in;
 
-    store_keychain(KEY_ACCESS_TOKEN, access_token)?;
-    store_keychain(KEY_REFRESH_TOKEN, refresh_token)?;
-    store_keychain(KEY_TOKEN_EXPIRY, &expiry)?;
+    Ok((access_token, refresh_token, expiry))
+}
 
+/// Stores all three token values atomically in the `integrations` table.
+/// Sets `enabled=1` so that `is_connected` returns true.
+pub fn store_tokens(
+    db: &Connection,
+    access_token: &str,
+    refresh_token: &str,
+    expiry: u64,
+) -> Result<(), String> {
+    let config = serde_json::to_string(&TokenConfig {
+        access_token: access_token.to_string(),
+        refresh_token: refresh_token.to_string(),
+        token_expiry: expiry,
+    })
+    .map_err(|e| e.to_string())?;
+
+    db.execute(
+        "INSERT OR REPLACE INTO integrations (id, enabled, config) VALUES ('calendar', 1, ?)",
+        rusqlite::params![config],
+    )
+    .map_err(|e| format!("failed to store calendar tokens: {e}"))?;
+
+    Ok(())
+}
+
+/// Reads all three token values from the `integrations` table.
+/// Returns `None` if not connected (no row, disabled, or missing/invalid JSON).
+pub fn read_tokens(db: &Connection) -> Option<(String, String, u64)> {
+    let config_json: String = db
+        .query_row(
+            "SELECT config FROM integrations WHERE id='calendar' AND enabled=1",
+            [],
+            |r| r.get(0),
+        )
+        .ok()?;
+
+    let cfg: TokenConfig = serde_json::from_str(&config_json).ok()?;
+    Some((cfg.access_token, cfg.refresh_token, cfg.token_expiry))
+}
+
+/// Updates only the `access_token` and `token_expiry` in the stored config,
+/// preserving the `refresh_token`.  Used after a token refresh.
+pub fn update_access_token(db: &Connection, access_token: &str, expiry: u64) -> Result<(), String> {
+    let config_json: String = db
+        .query_row(
+            "SELECT config FROM integrations WHERE id='calendar' AND enabled=1",
+            [],
+            |r| r.get(0),
+        )
+        .map_err(|e| format!("no calendar token row to update: {e}"))?;
+
+    let mut cfg: TokenConfig =
+        serde_json::from_str(&config_json).map_err(|e| format!("corrupt token config: {e}"))?;
+
+    cfg.access_token = access_token.to_string();
+    cfg.token_expiry = expiry;
+
+    let new_json = serde_json::to_string(&cfg).map_err(|e| e.to_string())?;
+
+    db.execute(
+        "UPDATE integrations SET config=? WHERE id='calendar'",
+        rusqlite::params![new_json],
+    )
+    .map_err(|e| format!("failed to update access token: {e}"))?;
+
+    Ok(())
+}
+
+/// Returns `true` if the user has a stored, enabled Google Calendar refresh
+/// token (i.e. the OAuth flow has been completed at least once).
+pub fn is_connected(db: &Connection) -> bool {
+    match read_tokens(db) {
+        Some((_, refresh, _)) => !refresh.is_empty(),
+        None => false,
+    }
+}
+
+/// Disables the calendar integration and clears stored tokens.
+pub fn disconnect(db: &Connection) -> Result<(), String> {
+    db.execute(
+        "UPDATE integrations SET enabled=0, config=NULL WHERE id='calendar'",
+        [],
+    )
+    .map_err(|e| format!("failed to disconnect calendar: {e}"))?;
     Ok(())
 }
 
 /// Returns a valid access token, refreshing it transparently if it is about
 /// to expire (within 60 seconds).
-pub async fn get_valid_token() -> Result<String, String> {
-    let access_token = read_keychain(KEY_ACCESS_TOKEN)
-        .ok_or("no access token stored — please connect Google Calendar")?;
-
-    let expiry_str = read_keychain(KEY_TOKEN_EXPIRY).unwrap_or_default();
-    let expiry: u64 = expiry_str.parse().unwrap_or(0);
+///
+/// Acquires the DB lock only briefly to read/write tokens; the HTTP refresh
+/// call is made without holding the lock.
+pub async fn get_valid_token(db_state: &DbState) -> Result<String, String> {
+    // Phase 1: read tokens under a short-lived lock.
+    let (access_token, refresh_token, expiry) = {
+        let db = db_state.0.lock().map_err(|e| e.to_string())?;
+        read_tokens(&db)
+            .ok_or("no calendar tokens stored — please connect Google Calendar")?
+    }; // lock released here
 
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -135,22 +238,27 @@ pub async fn get_valid_token() -> Result<String, String> {
         return Ok(access_token);
     }
 
-    // Token expired or about to expire — refresh.
-    refresh_token().await
+    // Phase 2: HTTP refresh — no lock held.
+    let (new_access_token, new_expiry) = do_refresh_http(&refresh_token).await?;
+
+    // Phase 3: persist updated tokens under a new short-lived lock.
+    {
+        let db = db_state.0.lock().map_err(|e| e.to_string())?;
+        update_access_token(&db, &new_access_token, new_expiry)?;
+    } // lock released
+
+    Ok(new_access_token)
 }
 
-/// Uses the stored refresh token to obtain a new access token and updates the
-/// keychain entries.  Returns the new access token.
-pub async fn refresh_token() -> Result<String, String> {
-    let refresh = read_keychain(KEY_REFRESH_TOKEN)
-        .ok_or("no refresh token stored — please reconnect Google Calendar")?;
-
+/// Performs the HTTP token-refresh call only.  Returns `(new_access_token, new_expiry_unix)`.
+/// Does not touch the database.
+async fn do_refresh_http(refresh_token: &str) -> Result<(String, u64), String> {
     let client = reqwest::Client::new();
     let params = [
         ("client_id", CLIENT_ID),
         ("client_secret", CLIENT_SECRET),
         ("grant_type", "refresh_token"),
-        ("refresh_token", refresh.as_str()),
+        ("refresh_token", refresh_token),
     ];
 
     let resp = client
@@ -179,7 +287,8 @@ pub async fn refresh_token() -> Result<String, String> {
     let access_token = body
         .get("access_token")
         .and_then(|v| v.as_str())
-        .ok_or("missing access_token in refresh response")?;
+        .ok_or("missing access_token in refresh response")?
+        .to_string();
 
     let expires_in = body
         .get("expires_in")
@@ -190,47 +299,6 @@ pub async fn refresh_token() -> Result<String, String> {
         .duration_since(UNIX_EPOCH)
         .map_err(|e| e.to_string())?
         .as_secs();
-    let expiry = (now + expires_in).to_string();
 
-    store_keychain(KEY_ACCESS_TOKEN, access_token)?;
-    store_keychain(KEY_TOKEN_EXPIRY, &expiry)?;
-
-    Ok(access_token.to_string())
-}
-
-/// Removes all calendar credentials from the system keychain.
-/// Errors are silently ignored so disconnect is always a no-op for missing entries.
-pub fn disconnect() {
-    for key in [KEY_ACCESS_TOKEN, KEY_REFRESH_TOKEN, KEY_TOKEN_EXPIRY] {
-        if let Ok(entry) = Entry::new(SERVICE, key) {
-            let _ = entry.delete_credential();
-        }
-    }
-}
-
-/// Returns `true` if a refresh token is present in the keychain (i.e. the
-/// user has previously completed the OAuth flow).
-pub fn is_connected() -> bool {
-    read_keychain(KEY_REFRESH_TOKEN)
-        .map(|v| !v.is_empty())
-        .unwrap_or(false)
-}
-
-// ---------------------------------------------------------------------------
-// Keychain helpers (private)
-// ---------------------------------------------------------------------------
-
-fn store_keychain(key: &str, value: &str) -> Result<(), String> {
-    Entry::new(SERVICE, key)
-        .map_err(|e| e.to_string())?
-        .set_password(value)
-        .map_err(|e| e.to_string())
-}
-
-fn read_keychain(key: &str) -> Option<String> {
-    Entry::new(SERVICE, key)
-        .ok()?
-        .get_password()
-        .ok()
-        .filter(|v| !v.is_empty())
+    Ok((access_token, now + expires_in))
 }

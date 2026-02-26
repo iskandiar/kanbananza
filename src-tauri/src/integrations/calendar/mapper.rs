@@ -3,7 +3,7 @@ use rusqlite::{Connection, OptionalExtension};
 
 use crate::db::DbState;
 use crate::integrations::calendar::auth::get_valid_token;
-use crate::integrations::calendar::client::{fetch_events, GCalEvent};
+use crate::integrations::calendar::client::{fetch_events, list_calendars, GCalEvent};
 
 /// Syncs Google Calendar events for the given ISO week into the local
 /// `cards` table via upsert on `external_id`.
@@ -14,14 +14,20 @@ use crate::integrations::calendar::client::{fetch_events, GCalEvent};
 /// The function acquires the DB lock only during the synchronous upsert
 /// phase so the `MutexGuard` is never held across an `.await` point.
 ///
-/// Returns the number of events upserted.
+/// Syncs events from ALL user calendars (filtered to those where the user
+/// has at least reader access).  Updates `integrations.last_synced_at`
+/// after every successful sync.
+///
+/// Returns the total number of events upserted across all calendars.
 pub async fn sync_events(
     week_start_date: &str,
     week_id: i64,
     db_state: &DbState,
 ) -> Result<usize, String> {
     // --- async phase: no DB lock held ---
-    let access_token = get_valid_token().await?;
+
+    // Step 1: get a valid (non-expired) access token.
+    let access_token = get_valid_token(db_state).await?;
 
     let monday = NaiveDate::parse_from_str(week_start_date, "%Y-%m-%d")
         .map_err(|e| format!("invalid week_start_date '{week_start_date}': {e}"))?;
@@ -30,18 +36,47 @@ pub async fn sync_events(
     let week_start = format!("{monday}T00:00:00Z");
     let week_end = format!("{friday}T23:59:59Z");
 
-    let events = fetch_events(&access_token, &week_start, &week_end).await?;
+    // Step 2: fetch the list of all accessible calendars.
+    let calendars = list_calendars(&access_token).await?;
 
-    // --- sync phase: acquire lock only for DB writes ---
-    let db = db_state.0.lock().map_err(|e| e.to_string())?;
-    let mut count = 0;
-    for event in events {
-        if upsert_event(&event, week_id, &db)? {
-            count += 1;
+    // Step 3: for each calendar, fetch events and upsert into DB.
+    let mut total_count = 0usize;
+
+    for calendar in &calendars {
+        // Each HTTP call is awaited without holding the DB lock.
+        let events = match fetch_events(&access_token, &week_start, &week_end, &calendar.id).await {
+            Ok(evts) => evts,
+            Err(e) => {
+                // Log the per-calendar error but continue with remaining calendars.
+                log::warn!(
+                    "[calendar] failed to fetch events for '{}': {e}",
+                    calendar.id
+                );
+                continue;
+            }
+        };
+
+        // Acquire lock only for the synchronous DB writes.
+        let db = db_state.0.lock().map_err(|e| e.to_string())?;
+        for event in events {
+            if upsert_event(&event, week_id, &db)? {
+                total_count += 1;
+            }
         }
+        // Lock released here, before the next HTTP call.
     }
 
-    Ok(count)
+    // Step 4: update last_synced_at in the integrations table.
+    {
+        let db = db_state.0.lock().map_err(|e| e.to_string())?;
+        db.execute(
+            "UPDATE integrations SET last_synced_at=datetime('now') WHERE id='calendar'",
+            [],
+        )
+        .map_err(|e| format!("failed to update last_synced_at: {e}"))?;
+    }
+
+    Ok(total_count)
 }
 
 /// Inserts or updates a single calendar event as a `cards` row.
