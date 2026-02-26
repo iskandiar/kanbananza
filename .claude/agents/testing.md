@@ -1,7 +1,7 @@
 ---
 name: testing
 description: Use this agent to write and run tests. Covers Rust unit tests for SQLite queries and business logic, Vitest tests for Svelte stores and logic-heavy components, and mocking the Tauri invoke() boundary. Do not use for trivial UI components or simple pass-through functions.
-model: sonnet
+model: haiku
 tools: Read, Edit, Write, Bash, Glob, Grep
 ---
 

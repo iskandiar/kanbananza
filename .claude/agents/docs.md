@@ -1,7 +1,7 @@
 ---
 name: docs
 description: Use this agent to write and maintain technical and product documentation. Use after implementing a feature, when making architectural decisions, or when complex logic needs explanation. Covers inline code documentation, DECISIONS.md updates, and feature-level docs in docs/.
-model: sonnet
+model: haiku
 tools: Read, Edit, Write, Glob, Grep
 ---
 
