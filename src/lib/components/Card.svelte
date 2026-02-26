@@ -5,17 +5,17 @@
   let { card, onMarkDone }: { card: Card; onMarkDone: (id: number) => void } = $props();
 
   const typeBadge: Record<string, string> = {
-    meeting: 'bg-blue-500/20 text-blue-300',
-    mr: 'bg-purple-500/20 text-purple-300',
-    thread: 'bg-yellow-500/20 text-yellow-300',
-    task: 'bg-emerald-500/20 text-emerald-300',
-    review: 'bg-slate-500/20 text-slate-300'
+    meeting: 'bg-blue-500/15 text-blue-300',
+    mr:      'bg-purple-500/15 text-purple-300',
+    thread:  'bg-yellow-500/15 text-yellow-300',
+    task:    'bg-emerald-500/15 text-emerald-300',
+    review:  'bg-slate-500/15 text-slate-300'
   };
 
   const impactBadge: Record<string, string> = {
-    low: 'text-[var(--color-muted)]',
-    mid: 'text-amber-400',
-    high: 'text-rose-400'
+    low:  'text-[var(--color-impact-low)]  bg-[var(--color-impact-low-bg)]  px-1.5 py-0.5 rounded',
+    mid:  'text-[var(--color-impact-mid)]  bg-[var(--color-impact-mid-bg)]  px-1.5 py-0.5 rounded',
+    high: 'text-[var(--color-impact-high)] bg-[var(--color-impact-high-bg)] px-1.5 py-0.5 rounded',
   };
 
   const meetingTime = $derived.by(() => {
@@ -61,11 +61,11 @@
 </script>
 
 <div
-  class="group rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 hover:border-indigo-500/40 transition-colors"
+  class="group rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 hover:border-[var(--color-accent)]/40 hover:bg-[var(--color-surface-raised)] transition-colors"
   class:cursor-grab={!isEditing}
   class:active:cursor-grabbing={!isEditing}
   class:cursor-default={isEditing}
-  class:opacity-50={card.status === 'done'}
+  class:opacity-40={card.status === 'done'}
 >
   {#if meetingTime}
     <span class="text-xs text-[var(--color-muted)] mb-1 block">{meetingTime}</span>
@@ -84,28 +84,28 @@
         <a
           href={card.url}
           target="_blank"
-          class="text-xs text-[var(--color-muted)] hover:text-indigo-400"
+          class="text-xs text-[var(--color-muted)] hover:text-[var(--color-accent-hover)]"
           onclick={(e) => e.stopPropagation()}
         >↗</a>
       {/if}
       {#if !isEditing}
         <button
           onclick={startEdit}
-          class="text-xs text-[var(--color-muted)] hover:text-indigo-400 transition-colors"
+          class="text-xs text-[var(--color-muted)] hover:text-[var(--color-accent-hover)] transition-colors"
           aria-label="Edit card"
           title="Edit card"
         >✎</button>
         {#if card.status !== 'done'}
           <button
             onclick={() => onMarkDone(card.id)}
-            class="text-xs text-[var(--color-muted)] hover:text-emerald-400 transition-colors"
+            class="text-xs text-[var(--color-muted)] hover:text-[var(--color-done)] transition-colors"
             aria-label="Mark done"
             title="Mark done"
           >✓</button>
         {:else}
           <button
             onclick={() => boardStore.updateCard(card.id, { status: 'planned' })}
-            class="text-xs text-[var(--color-muted)] hover:text-amber-400 transition-colors"
+            class="text-xs text-[var(--color-muted)] hover:text-[var(--color-impact-mid)] transition-colors"
             aria-label="Undo done"
             title="Undo"
           >↩</button>
@@ -124,7 +124,7 @@
         type="text"
         bind:value={editTitle}
         use:focus
-        class="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded px-2 py-1 text-xs text-[var(--color-text)] focus:outline-none focus:ring-1 focus:ring-indigo-500"
+        class="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded px-2 py-1 text-xs text-[var(--color-text)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
         onkeydown={(e) => { if (e.key === 'Escape') cancelEdit(); }}
       />
       <div class="flex gap-1.5">
@@ -132,7 +132,7 @@
           <button
             type="button"
             onclick={() => { editImpact = editImpact === level ? '' : level; }}
-            class="flex-1 text-xs py-0.5 rounded border transition-colors {editImpact === level ? 'border-indigo-500/60 text-indigo-400 bg-indigo-500/10' : 'border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]'}"
+            class="flex-1 text-xs py-0.5 rounded border transition-colors {editImpact === level ? 'border-[var(--color-accent)]/60 text-[var(--color-accent)] bg-[var(--color-accent)]/10' : 'border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]'}"
           >{level}</button>
         {/each}
       </div>
@@ -142,20 +142,20 @@
         step="0.5"
         min="0"
         placeholder="hours"
-        class="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded px-2 py-1 text-xs text-[var(--color-text)] focus:outline-none focus:ring-1 focus:ring-indigo-500"
+        class="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded px-2 py-1 text-xs text-[var(--color-text)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
         onkeydown={(e) => { if (e.key === 'Escape') cancelEdit(); }}
       />
       <input
         type="text"
         bind:value={editUrl}
         placeholder="https://…"
-        class="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded px-2 py-1 text-xs text-[var(--color-text)] focus:outline-none focus:ring-1 focus:ring-indigo-500"
+        class="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded px-2 py-1 text-xs text-[var(--color-text)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
         onkeydown={(e) => { if (e.key === 'Escape') cancelEdit(); }}
       />
       <div class="flex gap-1.5">
         <button
           type="submit"
-          class="flex-1 text-xs py-1 rounded bg-indigo-600/80 hover:bg-indigo-600 text-white transition-colors"
+          class="flex-1 text-xs py-1 rounded bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white transition-colors"
         >Save</button>
         <button
           type="button"

@@ -83,7 +83,7 @@
     use:dndzone={{
       items: localTasks,
       flipDurationMs: 150,
-      dropTargetStyle: { outline: 'none', background: 'rgba(99, 102, 241, 0.07)', 'border-radius': '6px' }
+      dropTargetStyle: { outline: 'none', background: 'rgba(61,126,255,0.07)', 'border-radius': '6px' }
     }}
     onconsider={handleDndConsider}
     onfinalize={handleDndFinalize}

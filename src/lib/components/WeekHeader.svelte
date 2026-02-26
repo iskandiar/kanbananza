@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { themeStore } from '$lib/stores/theme.svelte';
+
   let {
     weekLabel,
     onPrev,
@@ -11,7 +13,7 @@
   <div class="flex items-center gap-1">
     <button
       onclick={onPrev}
-      class="p-1.5 rounded hover:bg-[var(--color-surface)] text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors"
+      class="p-1.5 rounded hover:bg-[var(--color-surface-raised)] text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors"
       aria-label="Previous week"
     >
       ←
@@ -19,7 +21,7 @@
     <span class="text-sm font-medium text-[var(--color-text)] px-2">{weekLabel}</span>
     <button
       onclick={onNext}
-      class="p-1.5 rounded hover:bg-[var(--color-surface)] text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors"
+      class="p-1.5 rounded hover:bg-[var(--color-surface-raised)] text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors"
       aria-label="Next week"
     >
       →
@@ -29,14 +31,22 @@
   <div class="flex items-center gap-2">
     <button
       onclick={onRollover}
-      class="text-xs px-2.5 py-1 rounded border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] hover:border-indigo-500/50 transition-colors"
+      class="text-xs px-2.5 py-1 rounded border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-accent)] transition-colors"
       title="Move unfinished cards to backlog"
     >
       Rollover
     </button>
+    <button
+      onclick={themeStore.toggle}
+      class="p-1.5 rounded hover:bg-[var(--color-surface-raised)] text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors"
+      aria-label={themeStore.current === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+      title={themeStore.current === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+    >
+      {themeStore.current === 'dark' ? '☀' : '☾'}
+    </button>
     <a
       href="/settings"
-      class="p-1.5 rounded hover:bg-[var(--color-surface)] text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors"
+      class="p-1.5 rounded hover:bg-[var(--color-surface-raised)] text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors"
       aria-label="Settings"
       title="Settings"
     >

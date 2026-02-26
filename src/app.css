@@ -2,10 +2,57 @@
 
 @theme {
   --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
-  --color-background: oklch(0.145 0 0);
-  --color-surface: oklch(0.18 0 0);
-  --color-border: oklch(0.25 0 0);
-  --color-muted: oklch(0.45 0 0);
-  --color-text: oklch(0.92 0 0);
-  --color-text-muted: oklch(0.6 0 0);
+  --radius: 0.5rem;
+}
+
+/* Dark theme — default, applied to :root */
+:root {
+  --color-background: #0D0F14;
+  --color-surface: #161A22;
+  --color-surface-raised: #1C2130;
+  --color-border: #2A2F3D;
+  --color-text: #E2E4EC;
+  --color-text-muted: #8B90A0;
+  --color-muted: #555B6E;
+  --color-accent: #3D7EFF;
+  --color-accent-hover: #5A94FF;
+
+  /* Impact */
+  --color-impact-high: #E05252;
+  --color-impact-high-bg: rgba(224, 82, 82, 0.12);
+  --color-impact-mid: #D4853A;
+  --color-impact-mid-bg: rgba(212, 133, 58, 0.12);
+  --color-impact-low: #4B7FCC;
+  --color-impact-low-bg: rgba(75, 127, 204, 0.12);
+  --color-done: #4A9B6F;
+  --color-done-bg: rgba(74, 155, 111, 0.12);
+}
+
+/* Light theme — applied when <html class="light"> */
+:root.light {
+  --color-background: #FFFFFF;
+  --color-surface: #F4F5F7;
+  --color-surface-raised: #ECEEF2;
+  --color-border: #DDE0E8;
+  --color-text: #0D0F14;
+  --color-text-muted: #5A5F72;
+  --color-muted: #9DA2B0;
+  --color-accent: #3D7EFF;
+  --color-accent-hover: #2B6AEE;
+
+  /* Impact — same values, work on light backgrounds */
+  --color-impact-high: #E05252;
+  --color-impact-high-bg: rgba(224, 82, 82, 0.12);
+  --color-impact-mid: #D4853A;
+  --color-impact-mid-bg: rgba(212, 133, 58, 0.12);
+  --color-impact-low: #4B7FCC;
+  --color-impact-low-bg: rgba(75, 127, 204, 0.12);
+  --color-done: #4A9B6F;
+  --color-done-bg: rgba(74, 155, 111, 0.12);
+}
+
+body {
+  background-color: var(--color-background);
+  color: var(--color-text);
+  font-family: var(--font-sans);
 }
