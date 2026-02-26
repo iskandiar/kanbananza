@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Card } from '$lib/types';
+  import { dndzone } from 'svelte-dnd-action';
   import CardComponent from './Card.svelte';
   import QuickAdd from './QuickAdd.svelte';
 
@@ -7,13 +8,33 @@
     cards = [],
     isOpen,
     onAddCard,
-    onClose
+    onClose,
+    onMoveCard,
+    onMarkDone
   }: {
     cards: Card[];
     isOpen: boolean;
     onAddCard: (title: string) => void;
     onClose: () => void;
+    onMoveCard: (cardId: number, weekId: number | null, dayOfWeek: number | null, position: number) => void;
+    onMarkDone: (cardId: number) => void;
   } = $props();
+
+  let localCards = $state<Card[]>([]);
+  $effect(() => { localCards = cards; });
+
+  function handleDndConsider(e: CustomEvent<{ items: Card[] }>) {
+    localCards = e.detail.items;
+  }
+
+  function handleDndFinalize(e: CustomEvent<{ items: Card[] }>) {
+    localCards = e.detail.items;
+    localCards.forEach((card, i) => {
+      if (card.week_id !== null || card.position !== i) {
+        onMoveCard(card.id, null, null, i);
+      }
+    });
+  }
 </script>
 
 {#if isOpen}
@@ -26,10 +47,15 @@
         aria-label="Close backlog"
       >×</button>
     </div>
-    <div class="flex flex-col gap-2 p-3 overflow-y-auto flex-1">
+    <div
+      class="flex flex-col gap-2 p-3 overflow-y-auto flex-1 min-h-[2rem]"
+      use:dndzone={{ items: localCards, flipDurationMs: 150 }}
+      onconsider={handleDndConsider}
+      onfinalize={handleDndFinalize}
+    >
       <QuickAdd onAdd={onAddCard} />
-      {#each cards as card (card.id)}
-        <CardComponent {card} />
+      {#each localCards as card (card.id)}
+        <CardComponent {card} {onMarkDone} />
       {/each}
     </div>
   </aside>

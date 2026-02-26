@@ -11,33 +11,43 @@
     availableHours,
     onPrevWeek,
     onNextWeek,
-    onAddCard
+    onAddCard,
+    onMoveCard,
+    onMarkDone,
+    onRollover
   }: {
     weekLabel: string;
-    days: Array<{ label: string; date: string; meetings: Card[]; tasks: Card[] }>;
+    days: Array<{ label: string; date: string; dayOfWeek: number; weekId: number | null; meetings: Card[]; tasks: Card[] }>;
     backlogCards: Card[];
     availableHours: number;
     onPrevWeek: () => void;
     onNextWeek: () => void;
-    onAddCard: (dayIndex: number | null, title: string) => void;
+    onAddCard: (dayOfWeek: number | null, title: string) => void;
+    onMoveCard: (cardId: number, weekId: number | null, dayOfWeek: number | null, position: number) => void;
+    onMarkDone: (cardId: number) => void;
+    onRollover: () => void;
   } = $props();
 
   let backlogOpen = $state(false);
 </script>
 
 <div class="flex flex-col h-screen bg-[var(--color-background)] text-[var(--color-text)]">
-  <WeekHeader {weekLabel} onPrev={onPrevWeek} onNext={onNextWeek} />
+  <WeekHeader {weekLabel} onPrev={onPrevWeek} onNext={onNextWeek} {onRollover} />
 
   <div class="flex flex-1 min-h-0">
     <div class="flex flex-1 min-w-0 overflow-x-auto">
-      {#each days as day, i (day.date)}
+      {#each days as day (day.date)}
         <DayColumn
           label={day.label}
           date={day.date}
+          dayOfWeek={day.dayOfWeek}
+          weekId={day.weekId}
           meetings={day.meetings}
           tasks={day.tasks}
           {availableHours}
-          onAddCard={(title) => onAddCard(i, title)}
+          onAddCard={(title) => onAddCard(day.dayOfWeek, title)}
+          {onMoveCard}
+          {onMarkDone}
         />
       {/each}
     </div>
@@ -47,6 +57,8 @@
       isOpen={backlogOpen}
       onAddCard={(title) => onAddCard(null, title)}
       onClose={() => (backlogOpen = false)}
+      {onMoveCard}
+      {onMarkDone}
     />
 
     {#if !backlogOpen}
