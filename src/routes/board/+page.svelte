@@ -49,7 +49,11 @@
   }
 </script>
 
-{#if boardStore.isLoading && !boardStore.currentWeek}
+{#if boardStore.error}
+  <div class="flex items-center justify-center h-screen bg-[var(--color-background)] text-rose-400 text-sm">
+    {boardStore.error}
+  </div>
+{:else if boardStore.isLoading && !boardStore.currentWeek}
   <div class="flex items-center justify-center h-screen bg-[var(--color-background)] text-[var(--color-muted)] text-sm">
     Loading…
   </div>

@@ -16,6 +16,9 @@ pub fn run() {
             std::fs::create_dir_all(&data_dir)?;
             let db_path = data_dir.join("kanbananza.db");
             let conn = Connection::open(&db_path).expect("failed to open db");
+            // WAL mode: writes survive crashes; readers never block writers
+            conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;")
+                .expect("failed to set WAL mode");
             conn.execute_batch(include_str!("../migrations/0001_initial.sql"))
                 .expect("failed to run migrations");
             app.manage(DbState(Mutex::new(conn)));
