@@ -36,7 +36,9 @@
   });
 
   async function handleAddCard(dayOfWeek: number | null, title: string) {
-    await boardStore.addCard(title, boardStore.currentWeek?.id ?? null, dayOfWeek);
+    // Backlog cards have no week assignment (week_id = null)
+    const weekId = dayOfWeek !== null ? (boardStore.currentWeek?.id ?? null) : null;
+    await boardStore.addCard(title, weekId, dayOfWeek);
   }
 
   async function handleMoveCard(

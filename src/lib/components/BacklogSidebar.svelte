@@ -53,7 +53,9 @@
   </div>
 
   {#if isOpen}
-    <QuickAdd onAdd={onAddCard} />
+    <div class="px-3 py-2 border-b border-[var(--color-border)]">
+      <QuickAdd onAdd={onAddCard} />
+    </div>
   {/if}
 
   <div

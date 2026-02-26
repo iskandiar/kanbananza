@@ -40,7 +40,7 @@ pub fn list_cards_by_week(week_id: Option<i64>, state: State<DbState>) -> Result
             Box::new(id),
         ),
         None => (
-            &format!("{SELECT} WHERE week_id IS NULL ORDER BY position"),
+            &format!("{SELECT} WHERE week_id IS ? ORDER BY position"),
             Box::new(rusqlite::types::Null),
         ),
     };
