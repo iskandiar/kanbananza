@@ -69,46 +69,19 @@ pub fn run() {
                         continue;
                     }
 
-                    // Fetch the most recent week metadata with a short-lived lock.
-                    let week_info = {
-                        match db_state.0.lock() {
-                            Ok(guard) => guard
-                                .query_row(
-                                    "SELECT id, start_date FROM weeks \
-                                     ORDER BY year DESC, week_number DESC LIMIT 1",
-                                    [],
-                                    |r| Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?)),
-                                )
-                                .ok(),
-                            Err(e) => {
-                                log::error!("[poll] db lock error: {e}");
-                                None
-                            }
+                    match integrations::calendar::sync_events(&db_state).await {
+                        Ok(count) => {
+                            let _ = poll_handle.emit(
+                                "calendar://synced",
+                                serde_json::json!({ "count": count, "error": null }),
+                            );
                         }
-                        // guard dropped here — lock released before await
-                    };
-
-                    if let Some((week_id, start_date)) = week_info {
-                        match integrations::calendar::sync_events(
-                            &start_date,
-                            week_id,
-                            &db_state,
-                        )
-                        .await
-                        {
-                            Ok(count) => {
-                                let _ = poll_handle.emit(
-                                    "calendar://synced",
-                                    serde_json::json!({ "count": count, "error": null }),
-                                );
-                            }
-                            Err(e) => {
-                                log::error!("[poll] sync error: {e}");
-                                let _ = poll_handle.emit(
-                                    "calendar://synced",
-                                    serde_json::json!({ "count": 0, "error": e }),
-                                );
-                            }
+                        Err(e) => {
+                            log::error!("[poll] sync error: {e}");
+                            let _ = poll_handle.emit(
+                                "calendar://synced",
+                                serde_json::json!({ "count": 0, "error": e }),
+                            );
                         }
                     }
                 }

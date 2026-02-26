@@ -5,49 +5,40 @@ use crate::db::DbState;
 use crate::integrations::calendar::auth::get_valid_token;
 use crate::integrations::calendar::client::{fetch_events, list_calendars, GCalEvent};
 
-/// Syncs Google Calendar events for the given ISO week into the local
-/// `cards` table via upsert on `external_id`.
+/// Syncs Google Calendar events for the next 10 days (today … today+9) into
+/// the local `cards` table via upsert on `external_id`.
 ///
-/// `week_start_date` — Monday of the week in `"YYYY-MM-DD"` format.
-/// `week_id`         — the corresponding `weeks.id` row in SQLite.
+/// The window is always computed from today (UTC midnight), so each sync is
+/// independent of which week the user currently has open in the UI.
+/// Events that fall on different ISO weeks are each assigned to the correct
+/// `weeks` row, creating new rows as needed.
 ///
-/// The function acquires the DB lock only during the synchronous upsert
-/// phase so the `MutexGuard` is never held across an `.await` point.
-///
-/// Syncs events from ALL user calendars (filtered to those where the user
-/// has at least reader access).  Updates `integrations.last_synced_at`
-/// after every successful sync.
-///
+/// The DB lock is never held across an `.await` point.
 /// Returns the total number of events upserted across all calendars.
-pub async fn sync_events(
-    week_start_date: &str,
-    week_id: i64,
-    db_state: &DbState,
-) -> Result<usize, String> {
+pub async fn sync_events(db_state: &DbState) -> Result<usize, String> {
     // --- async phase: no DB lock held ---
 
     // Step 1: get a valid (non-expired) access token.
     let access_token = get_valid_token(db_state).await?;
 
-    let monday = NaiveDate::parse_from_str(week_start_date, "%Y-%m-%d")
-        .map_err(|e| format!("invalid week_start_date '{week_start_date}': {e}"))?;
-    let friday = monday + chrono::Duration::days(4);
+    // Step 2: build a rolling 10-day window from today (UTC).
+    let today = Utc::now().date_naive();
+    let end = today + chrono::Duration::days(9); // inclusive — 10 days total
 
-    let week_start = format!("{monday}T00:00:00Z");
-    let week_end = format!("{friday}T23:59:59Z");
+    let time_min = format!("{}T00:00:00Z", today.format("%Y-%m-%d"));
+    let time_max = format!("{}T23:59:59Z", end.format("%Y-%m-%d"));
 
-    // Step 2: fetch the list of all accessible calendars.
+    // Step 3: fetch the list of all accessible calendars.
     let calendars = list_calendars(&access_token).await?;
 
-    // Step 3: for each calendar, fetch events and upsert into DB.
+    // Step 4: for each calendar, fetch events and upsert into DB.
     let mut total_count = 0usize;
 
     for calendar in &calendars {
         // Each HTTP call is awaited without holding the DB lock.
-        let events = match fetch_events(&access_token, &week_start, &week_end, &calendar.id).await {
+        let events = match fetch_events(&access_token, &time_min, &time_max, &calendar.id).await {
             Ok(evts) => evts,
             Err(e) => {
-                // Log the per-calendar error but continue with remaining calendars.
                 log::warn!(
                     "[calendar] failed to fetch events for '{}': {e}",
                     calendar.id
@@ -59,14 +50,14 @@ pub async fn sync_events(
         // Acquire lock only for the synchronous DB writes.
         let db = db_state.0.lock().map_err(|e| e.to_string())?;
         for event in events {
-            if upsert_event(&event, week_id, &db)? {
+            if upsert_event(&event, &db)? {
                 total_count += 1;
             }
         }
         // Lock released here, before the next HTTP call.
     }
 
-    // Step 4: update last_synced_at in the integrations table.
+    // Step 5: update last_synced_at in the integrations table.
     {
         let db = db_state.0.lock().map_err(|e| e.to_string())?;
         db.execute(
@@ -79,14 +70,46 @@ pub async fn sync_events(
     Ok(total_count)
 }
 
+/// Finds or creates the `weeks` row for the ISO week that contains `date`.
+/// Returns the `weeks.id`.
+fn get_or_create_week(db: &Connection, date: NaiveDate) -> Result<i64, String> {
+    let iso = date.iso_week();
+    let year = iso.year() as i64;
+    let week_number = iso.week() as i64;
+
+    // Monday of this ISO week.
+    let days_from_monday = (date.weekday().number_from_monday() - 1) as i64;
+    let monday = date - chrono::Duration::days(days_from_monday);
+    let start_date = monday.format("%Y-%m-%d").to_string();
+
+    // Try to find an existing row first.
+    let existing: Option<i64> = db
+        .query_row(
+            "SELECT id FROM weeks WHERE year=? AND week_number=?",
+            rusqlite::params![year, week_number],
+            |r| r.get(0),
+        )
+        .optional()
+        .map_err(|e| e.to_string())?;
+
+    if let Some(id) = existing {
+        return Ok(id);
+    }
+
+    // Insert a new week row.
+    db.execute(
+        "INSERT INTO weeks (year, week_number, start_date) VALUES (?, ?, ?)",
+        rusqlite::params![year, week_number, start_date],
+    )
+    .map_err(|e| format!("failed to create week row: {e}"))?;
+
+    Ok(db.last_insert_rowid())
+}
+
 /// Inserts or updates a single calendar event as a `cards` row.
 /// Returns `true` when the row was written, `false` when the event was
 /// skipped (e.g. weekend or missing dateTime).
-fn upsert_event(
-    event: &GCalEvent,
-    week_id: i64,
-    db: &Connection,
-) -> Result<bool, String> {
+fn upsert_event(event: &GCalEvent, db: &Connection) -> Result<bool, String> {
     let start_iso = match &event.start.date_time {
         Some(s) => s,
         // All-day events were already filtered out in client.rs, but be safe.
@@ -102,6 +125,9 @@ fn upsert_event(
     if day_of_week > 5 {
         return Ok(false); // skip weekend events
     }
+
+    // Get or create the week row for this event's UTC date.
+    let week_id = get_or_create_week(db, start.date_naive())?;
 
     let title = event.summary.as_deref().unwrap_or("(no title)");
     let metadata = serde_json::json!({

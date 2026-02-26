@@ -71,37 +71,23 @@ pub async fn get_calendar_auth_url(app: AppHandle) -> Result<(), String> {
             app.emit("calendar://connected", ())
                 .map_err(|e| e.to_string())?;
 
-            // Step 3: immediate sync for the current week.
+            // Step 3: immediate sync for the next 10 days.
             let db_state = app.state::<DbState>();
-            let week_info: Option<(i64, String)> = {
-                db_state.0.lock().ok().and_then(|g| {
-                    g.query_row(
-                        "SELECT id, start_date FROM weeks \
-                         ORDER BY year DESC, week_number DESC LIMIT 1",
-                        [],
-                        |r: &rusqlite::Row| Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?)),
-                    )
-                    .ok()
-                })
-            };
-
-            if let Some((week_id, start_date)) = week_info {
-                match calendar::sync_events(&start_date, week_id, &db_state).await {
-                    Ok(count) => {
-                        let _ = app.emit(
-                            "calendar://synced",
-                            SyncResult { count, error: None },
-                        );
-                    }
-                    Err(e) => {
-                        let _ = app.emit(
-                            "calendar://synced",
-                            SyncResult {
-                                count: 0,
-                                error: Some(e),
-                            },
-                        );
-                    }
+            match calendar::sync_events(&db_state).await {
+                Ok(count) => {
+                    let _ = app.emit(
+                        "calendar://synced",
+                        SyncResult { count, error: None },
+                    );
+                }
+                Err(e) => {
+                    let _ = app.emit(
+                        "calendar://synced",
+                        SyncResult {
+                            count: 0,
+                            error: Some(e),
+                        },
+                    );
                 }
             }
 
@@ -176,19 +162,7 @@ pub async fn sync_calendar(
     state: State<'_, DbState>,
     app: AppHandle,
 ) -> Result<(), String> {
-    // Fetch the most recent week's metadata while holding the lock briefly.
-    let (week_id, start_date) = {
-        let db = state.0.lock().map_err(|e| e.to_string())?;
-        db.query_row(
-            "SELECT id, start_date FROM weeks ORDER BY year DESC, week_number DESC LIMIT 1",
-            [],
-            |r| Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?)),
-        )
-        .map_err(|e| format!("no weeks found — open the board first: {e}"))?
-    }; // lock released here, before any await
-
-    // sync_events acquires the lock internally, after the async HTTP calls.
-    match calendar::sync_events(&start_date, week_id, &state).await {
+    match calendar::sync_events(&state).await {
         Ok(count) => {
             app.emit("calendar://synced", SyncResult { count, error: None })
                 .map_err(|e| e.to_string())?;
