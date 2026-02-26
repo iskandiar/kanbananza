@@ -36,7 +36,7 @@
   function startEdit() {
     editTitle = card.title;
     editImpact = card.impact ?? '';
-    editHours = card.time_estimate != null ? String(card.time_estimate) : '';
+    editHours = card.time_estimate != null ? String(card.time_estimate) : '1';
     editUrl = card.url ?? '';
     isEditing = true;
   }
@@ -102,6 +102,13 @@
             aria-label="Mark done"
             title="Mark done"
           >✓</button>
+        {:else}
+          <button
+            onclick={() => boardStore.updateCard(card.id, { status: 'planned' })}
+            class="text-xs text-[var(--color-muted)] hover:text-amber-400 transition-colors"
+            aria-label="Undo done"
+            title="Undo"
+          >↩</button>
         {/if}
       {/if}
     </div>
@@ -120,16 +127,15 @@
         class="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded px-2 py-1 text-xs text-[var(--color-text)] focus:outline-none focus:ring-1 focus:ring-indigo-500"
         onkeydown={(e) => { if (e.key === 'Escape') cancelEdit(); }}
       />
-      <select
-        bind:value={editImpact}
-        class="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded px-2 py-1 text-xs text-[var(--color-text)] focus:outline-none focus:ring-1 focus:ring-indigo-500"
-        onkeydown={(e) => { if (e.key === 'Escape') cancelEdit(); }}
-      >
-        <option value="">— impact</option>
-        <option value="low">low</option>
-        <option value="mid">mid</option>
-        <option value="high">high</option>
-      </select>
+      <div class="flex gap-1.5">
+        {#each ['low', 'mid', 'high'] as level}
+          <button
+            type="button"
+            onclick={() => { editImpact = editImpact === level ? '' : level; }}
+            class="flex-1 text-xs py-0.5 rounded border transition-colors {editImpact === level ? 'border-indigo-500/60 text-indigo-400 bg-indigo-500/10' : 'border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]'}"
+          >{level}</button>
+        {/each}
+      </div>
       <input
         type="number"
         bind:value={editHours}
