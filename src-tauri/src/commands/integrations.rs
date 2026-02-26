@@ -14,11 +14,10 @@ pub struct PkceState(pub std::sync::Mutex<Option<String>>);
 // Commands
 // ---------------------------------------------------------------------------
 
-/// Generates a PKCE verifier, stores it in managed state, and returns the
-/// Google OAuth 2.0 authorization URL.  The frontend should open this URL in
-/// the system browser so the user can complete the consent screen.
+/// Generates a PKCE verifier, stores it in managed state, and opens the
+/// Google OAuth 2.0 authorization URL in the system default browser.
 #[tauri::command]
-pub fn get_calendar_auth_url(pkce: State<PkceState>) -> Result<String, String> {
+pub fn get_calendar_auth_url(pkce: State<PkceState>) -> Result<(), String> {
     // 64 random bytes → base64url (no padding) → ~86-char verifier.
     let mut bytes = [0u8; 64];
     rand::thread_rng().fill_bytes(&mut bytes);
@@ -26,7 +25,8 @@ pub fn get_calendar_auth_url(pkce: State<PkceState>) -> Result<String, String> {
 
     *pkce.0.lock().map_err(|e| e.to_string())? = Some(verifier.clone());
 
-    Ok(calendar::get_auth_url(&verifier))
+    let url = calendar::get_auth_url(&verifier);
+    open::that(&url).map_err(|e| format!("failed to open browser: {e}"))
 }
 
 /// Triggers an immediate calendar sync for the current (most-recent) week.

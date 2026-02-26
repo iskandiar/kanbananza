@@ -62,8 +62,7 @@
   }
 
   async function connectCalendar() {
-    const url = await invoke<string>('get_calendar_auth_url');
-    window.open(url, '_blank');
+    await invoke('get_calendar_auth_url');
   }
 
   async function disconnectCalendar() {
