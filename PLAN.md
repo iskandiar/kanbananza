@@ -191,3 +191,7 @@ Tasks marked **∥** within a milestone can run in parallel — no file conflict
 - Notion integration
 - System tray
 - Clock in / out
+
+## Nice to have
+- **Responsive view** — adapt layout for smaller windows / tablet form factors
+- **View modes** — toggle between current week-grid view and a classic Kanban board (columns by status: To Do / In Progress / Done) instead of by day
