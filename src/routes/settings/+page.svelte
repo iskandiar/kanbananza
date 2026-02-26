@@ -1,5 +1,7 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
+  import { invoke } from '@tauri-apps/api/core';
+  import { listen } from '@tauri-apps/api/event';
   import { settingsStore } from '$lib/stores/settings.svelte';
   import { getSecret, storeSecret } from '$lib/api/settings';
   import IntegrationCard from '$lib/components/IntegrationCard.svelte';
@@ -46,9 +48,31 @@
     keySaveTimer = setTimeout(() => { keySaved = false; }, 1500);
   }
 
+  // --- Calendar integration state ---
+  let calendarConnected = $state(false);
+  let calendarSyncing = $state(false);
+
+  async function syncCalendar() {
+    calendarSyncing = true;
+    try {
+      await invoke('sync_calendar');
+    } finally {
+      calendarSyncing = false;
+    }
+  }
+
+  async function connectCalendar() {
+    const url = await invoke<string>('get_calendar_auth_url');
+    window.open(url, '_blank');
+  }
+
+  async function disconnectCalendar() {
+    await invoke('disconnect_calendar');
+    calendarConnected = false;
+  }
+
   // --- Integrations list ---
   const integrations = [
-    { id: 'calendar', name: 'Google Calendar', description: 'Import meetings as cards', status: 'coming_soon' as const },
     { id: 'gitlab',   name: 'GitLab',          description: 'Import open MRs',          status: 'coming_soon' as const },
     { id: 'linear',   name: 'Linear',           description: 'Import assigned issues',   status: 'coming_soon' as const },
     { id: 'slack',    name: 'Slack',            description: 'Import threads',           status: 'coming_soon' as const },
@@ -56,11 +80,24 @@
   ];
 
   // --- Bootstrap ---
+  let unlistenCalendarConnected: (() => void) | null = null;
+
   onMount(async () => {
     await settingsStore.load();
     availableHours = settingsStore.availableHours;
     selectedProvider = settingsStore.settings?.ai_provider ?? 'anthropic';
     await loadKeyStatus(selectedProvider);
+
+    calendarConnected = await invoke<boolean>('get_calendar_status');
+
+    unlistenCalendarConnected = await listen('calendar://connected', async () => {
+      calendarConnected = true;
+      await syncCalendar();
+    });
+  });
+
+  onDestroy(() => {
+    unlistenCalendarConnected?.();
   });
 </script>
 
@@ -159,6 +196,32 @@
       <p class="text-xs uppercase tracking-wide text-[var(--color-muted)] mb-3">Integrations</p>
 
       <div>
+        <!-- Google Calendar — live status -->
+        <IntegrationCard
+          name="Google Calendar"
+          description="Import meetings as cards"
+          status={calendarConnected ? 'connected' : 'not_connected'}
+          onConnect={connectCalendar}
+        />
+        {#if calendarConnected}
+          <div class="flex items-center gap-4 px-0 py-2 border-b border-[var(--color-border)]">
+            <button
+              onclick={syncCalendar}
+              disabled={calendarSyncing}
+              class="text-xs px-2.5 py-1 rounded border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-text)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              {calendarSyncing ? 'Syncing…' : 'Sync now'}
+            </button>
+            <button
+              onclick={disconnectCalendar}
+              class="text-xs text-red-400/70 hover:text-red-400 transition-colors"
+            >
+              Disconnect
+            </button>
+          </div>
+        {/if}
+
+        <!-- Other integrations — coming soon -->
         {#each integrations as integration (integration.id)}
           <IntegrationCard
             name={integration.name}
