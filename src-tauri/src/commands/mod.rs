@@ -1,3 +1,4 @@
+pub mod ai;
 pub mod cards;
 pub mod integrations;
 pub mod keychain;

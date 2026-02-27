@@ -18,6 +18,22 @@
     high: 'text-[var(--color-impact-high)] bg-[var(--color-impact-high-bg)] px-1.5 py-0.5 rounded',
   };
 
+  const aiFields = $derived.by(() => {
+    if (!card.metadata) return { description: null, impact: null, hours: null };
+    try {
+      const m = JSON.parse(card.metadata) as Record<string, unknown>;
+      const rawImpact = m.ai_impact as string | undefined;
+      return {
+        description: (m.ai_description as string) ?? null,
+        impact: rawImpact === 'medium' ? 'mid' : (rawImpact ?? null) as Impact | null,
+        hours: (m.ai_hours as number) ?? null,
+      };
+    } catch { return { description: null, impact: null, hours: null }; }
+  });
+
+  const displayImpact = $derived((card.impact ?? aiFields.impact) as Impact | null);
+  const displayHours = $derived(card.time_estimate !== null ? card.time_estimate : aiFields.hours);
+
   const meetingTime = $derived.by(() => {
     if (card.card_type !== 'meeting' || !card.metadata) return null;
     try {
@@ -71,13 +87,16 @@
     <span class="text-xs text-[var(--color-muted)] mb-1 block">{meetingTime}</span>
   {/if}
   <p class="text-sm text-[var(--color-text)] leading-snug">{card.title}</p>
+  {#if aiFields.description}
+    <p class="text-xs text-[var(--color-muted)] mt-0.5 line-clamp-2 leading-snug">{aiFields.description}</p>
+  {/if}
   <div class="mt-1.5 flex items-center gap-1.5 flex-wrap">
     <span class="text-xs px-1.5 py-0.5 rounded {typeBadge[card.card_type]}">{card.card_type}</span>
-    {#if card.impact}
-      <span class="text-xs {impactBadge[card.impact]}">{card.impact}</span>
+    {#if displayImpact}
+      <span class="text-xs {impactBadge[displayImpact]}">{displayImpact}</span>
     {/if}
-    {#if card.time_estimate}
-      <span class="text-xs text-[var(--color-muted)]">{card.time_estimate}h</span>
+    {#if displayHours}
+      <span class="text-xs text-[var(--color-muted)]">{displayHours}h</span>
     {/if}
     <div class="ml-auto flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
       {#if card.url}

@@ -70,6 +70,7 @@ pub struct Settings {
     pub id: i64,
     pub available_hours: f64,
     pub ai_provider: Option<String>,
+    pub auto_ai: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

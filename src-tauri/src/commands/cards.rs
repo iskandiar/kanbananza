@@ -54,35 +54,45 @@ pub fn list_cards_by_week(week_id: Option<i64>, state: State<DbState>) -> Result
 }
 
 #[tauri::command]
-pub fn create_card(
+pub async fn create_card(
     title: String,
     card_type: CardType, // validated enum — rejects unknown types at the boundary
     week_id: Option<i64>,
     day_of_week: Option<i64>,
-    state: State<DbState>,
+    state: State<'_, DbState>,
 ) -> Result<Card, String> {
-    let db = state.0.lock().map_err(|e| e.to_string())?;
-    let position: i64 = db
-        .query_row(
-            "SELECT COALESCE(MAX(position),0)+1 FROM cards WHERE week_id IS ? AND day_of_week IS ?",
-            rusqlite::params![week_id, day_of_week],
-            |r| r.get(0),
+    let (card_id, card) = {
+        let db = state.0.lock().map_err(|e| e.to_string())?;
+        let position: i64 = db
+            .query_row(
+                "SELECT COALESCE(MAX(position),0)+1 FROM cards WHERE week_id IS ? AND day_of_week IS ?",
+                rusqlite::params![week_id, day_of_week],
+                |r| r.get(0),
+            )
+            .map_err(|e| e.to_string())?;
+        // Serialize enum to the DB string value ("task", "meeting", etc.)
+        let card_type_str = serde_json::to_value(&card_type)
+            .map_err(|e| e.to_string())?
+            .as_str()
+            .unwrap_or("task")
+            .to_string();
+        db.execute(
+            "INSERT INTO cards (title,card_type,week_id,day_of_week,position) VALUES (?,?,?,?,?)",
+            rusqlite::params![title, card_type_str, week_id, day_of_week, position],
         )
         .map_err(|e| e.to_string())?;
-    // Serialize enum to the DB string value ("task", "meeting", etc.)
-    let card_type_str = serde_json::to_value(&card_type)
-        .map_err(|e| e.to_string())?
-        .as_str()
-        .unwrap_or("task")
-        .to_string();
-    db.execute(
-        "INSERT INTO cards (title,card_type,week_id,day_of_week,position) VALUES (?,?,?,?,?)",
-        rusqlite::params![title, card_type_str, week_id, day_of_week, position],
-    )
-    .map_err(|e| e.to_string())?;
-    let id = db.last_insert_rowid();
-    db.query_row(&format!("{SELECT} WHERE id=?"), [id], row_to_card)
-        .map_err(|e| e.to_string())
+        let id = db.last_insert_rowid();
+        let card = db
+            .query_row(&format!("{SELECT} WHERE id=?"), [id], row_to_card)
+            .map_err(|e| e.to_string())?;
+        (id, card)
+    }; // DB lock released
+
+    if let Err(e) = crate::ai::evaluate_card(card_id, &state).await {
+        log::warn!("[create_card] AI eval failed for card {card_id}: {e}");
+    }
+
+    Ok(card)
 }
 
 #[tauri::command]

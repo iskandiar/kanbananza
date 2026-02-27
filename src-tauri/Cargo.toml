@@ -27,7 +27,8 @@ base64 = "0.22"
 rand = "0.8"
 url = "2"
 open = "5"
-tokio = { version = "1", features = ["net", "io-util"] }
+tokio = { version = "1", features = ["net", "io-util", "time"] }
+async-openai = "0.27"
 log = "0.4"
 
 [profile.release]

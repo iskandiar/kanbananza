@@ -38,6 +38,7 @@ export interface Settings {
   id: number;
   available_hours: number;
   ai_provider: AiProvider | null;
+  auto_ai: boolean;
 }
 
 export interface Integration {

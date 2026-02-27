@@ -10,6 +10,7 @@ pub struct GitLabMR {
     pub state: String,
     pub project_id: i64,
     pub author: GitLabUser,
+    pub description: Option<String>,
 }
 
 /// Minimal user object embedded in a GitLab MR response.

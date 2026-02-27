@@ -3,7 +3,7 @@
   import { invoke } from '@tauri-apps/api/core';
   import { listen } from '@tauri-apps/api/event';
   import { settingsStore } from '$lib/stores/settings.svelte';
-  import { getSecret, storeSecret } from '$lib/api/settings';
+  import { getSecret, storeSecret, updateSettings } from '$lib/api/settings';
   import IntegrationCard from '$lib/components/IntegrationCard.svelte';
   import type { AiProvider } from '$lib/types';
 
@@ -21,6 +21,7 @@
 
   // --- AI provider state ---
   let selectedProvider = $state<AiProvider>('anthropic');
+  let autoAiEnabled = $state(false);
   let apiKeyInput = $state('');
   let keyIsSaved = $state(false);
   let keySaved = $state(false);
@@ -46,6 +47,11 @@
     keySaved = true;
     if (keySaveTimer) clearTimeout(keySaveTimer);
     keySaveTimer = setTimeout(() => { keySaved = false; }, 1500);
+  }
+
+  async function toggleAutoAi() {
+    autoAiEnabled = !autoAiEnabled;
+    await updateSettings({ autoAi: autoAiEnabled });
   }
 
   // --- Calendar integration state ---
@@ -140,6 +146,7 @@
     await settingsStore.load();
     availableHours = settingsStore.availableHours;
     selectedProvider = settingsStore.settings?.ai_provider ?? 'anthropic';
+    autoAiEnabled = settingsStore.settings?.auto_ai ?? false;
     await loadKeyStatus(selectedProvider);
 
     calendarConnected = await invoke<boolean>('get_calendar_status');
@@ -274,6 +281,25 @@
         {#if keySaved}
           <span class="text-xs text-emerald-500">Saved</span>
         {/if}
+      </div>
+
+      <!-- Auto-evaluate toggle -->
+      <div class="flex items-center justify-between mt-4">
+        <div>
+          <p class="text-sm text-[var(--color-text)]">Auto-evaluate cards</p>
+          <p class="text-xs text-[var(--color-text-muted)] mt-0.5">Automatically fills in title, description, impact and time estimate when cards are added</p>
+        </div>
+        <button
+          onclick={toggleAutoAi}
+          class="relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none {autoAiEnabled ? 'bg-indigo-600' : 'bg-[var(--color-border)]'}"
+          role="switch"
+          aria-checked={autoAiEnabled}
+          aria-label="Auto-evaluate cards"
+        >
+          <span
+            class="pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transform transition duration-200 {autoAiEnabled ? 'translate-x-4' : 'translate-x-0'}"
+          ></span>
+        </button>
       </div>
     </section>
 

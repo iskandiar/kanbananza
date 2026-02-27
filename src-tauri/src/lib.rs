@@ -1,9 +1,11 @@
+pub mod ai;
 pub mod commands;
 pub mod db;
 pub mod integrations;
 pub mod types;
 
 use commands::{
+    ai::summarise_week,
     cards::*,
     integrations::{disconnect_calendar, disconnect_gitlab, get_calendar_auth_url, get_calendar_status, sync_calendar, sync_gitlab},
     keychain::*,
@@ -33,6 +35,12 @@ pub fn run() {
                 .expect("failed to set WAL mode");
             conn.execute_batch(include_str!("../migrations/0001_initial.sql"))
                 .expect("failed to run migrations");
+            // 0002 adds a column via ALTER TABLE — ignore if already applied.
+            if let Err(e) = conn.execute_batch(include_str!("../migrations/0002_auto_ai.sql")) {
+                if !e.to_string().contains("duplicate column name") {
+                    panic!("failed to run auto_ai migration: {e}");
+                }
+            }
             app.manage(DbState(Mutex::new(conn)));
 
             // OAuth callback is handled via loopback TCP in get_calendar_auth_url —
@@ -117,6 +125,8 @@ pub fn run() {
             // GitLab integration
             sync_gitlab,
             disconnect_gitlab,
+            // AI
+            summarise_week,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application")

@@ -5,6 +5,7 @@ use serde::Deserialize;
 pub struct GCalEvent {
     pub id: String,
     pub summary: Option<String>,
+    pub description: Option<String>,
     pub start: GCalTime,
     pub end: GCalTime,
 }

@@ -33,6 +33,7 @@ pub async fn sync_events(db_state: &DbState) -> Result<usize, String> {
 
     // Step 4: for each calendar, fetch events and upsert into DB.
     let mut total_count = 0usize;
+    let mut card_ids: Vec<i64> = Vec::new();
 
     for calendar in &calendars {
         // Each HTTP call is awaited without holding the DB lock.
@@ -48,13 +49,15 @@ pub async fn sync_events(db_state: &DbState) -> Result<usize, String> {
         };
 
         // Acquire lock only for the synchronous DB writes.
-        let db = db_state.0.lock().map_err(|e| e.to_string())?;
-        for event in events {
-            if upsert_event(&event, &db)? {
-                total_count += 1;
+        {
+            let db = db_state.0.lock().map_err(|e| e.to_string())?;
+            for event in events {
+                if let Some(id) = upsert_event(&event, &db)? {
+                    total_count += 1;
+                    card_ids.push(id);
+                }
             }
-        }
-        // Lock released here, before the next HTTP call.
+        } // Lock released here, before the next HTTP call.
     }
 
     // Step 5: reorder all synced calendar cards by start_time within each day,
@@ -67,6 +70,12 @@ pub async fn sync_events(db_state: &DbState) -> Result<usize, String> {
             [],
         )
         .map_err(|e| format!("failed to update last_synced_at: {e}"))?;
+    }
+
+    for card_id in card_ids {
+        if let Err(e) = crate::ai::evaluate_card(card_id, db_state).await {
+            log::warn!("[sync_calendar] AI eval failed for card {card_id}: {e}");
+        }
     }
 
     Ok(total_count)
@@ -109,13 +118,13 @@ fn get_or_create_week(db: &Connection, date: NaiveDate) -> Result<i64, String> {
 }
 
 /// Inserts or updates a single calendar event as a `cards` row.
-/// Returns `true` when the row was written, `false` when the event was
-/// skipped (e.g. weekend or missing dateTime).
-fn upsert_event(event: &GCalEvent, db: &Connection) -> Result<bool, String> {
+/// Returns `Some(card_id)` when the row was written, `None` when the event
+/// was skipped (e.g. weekend or missing dateTime).
+fn upsert_event(event: &GCalEvent, db: &Connection) -> Result<Option<i64>, String> {
     let start_iso = match &event.start.date_time {
         Some(s) => s,
         // All-day events were already filtered out in client.rs, but be safe.
-        None => return Ok(false),
+        None => return Ok(None),
     };
 
     let start: DateTime<Utc> = start_iso
@@ -125,7 +134,7 @@ fn upsert_event(event: &GCalEvent, db: &Connection) -> Result<bool, String> {
     // Chrono: Monday = 1 … Sunday = 7.
     let day_of_week = start.weekday().number_from_monday() as i64;
     if day_of_week > 5 {
-        return Ok(false); // skip weekend events
+        return Ok(None); // skip weekend events
     }
 
     // Get or create the week row for this event's UTC date.
@@ -135,6 +144,7 @@ fn upsert_event(event: &GCalEvent, db: &Connection) -> Result<bool, String> {
     let metadata = serde_json::json!({
         "start_time": event.start.date_time,
         "end_time": event.end.date_time,
+        "description": event.description,
     })
     .to_string();
 
@@ -145,22 +155,44 @@ fn upsert_event(event: &GCalEvent, db: &Connection) -> Result<bool, String> {
         if mins > 0 { Some(mins as f64 / 60.0) } else { None }
     });
 
-    let existing_id: Option<i64> = db
+    let existing: Option<(i64, Option<String>)> = db
         .query_row(
-            "SELECT id FROM cards WHERE external_id = ? AND source = 'calendar'",
+            "SELECT id, metadata FROM cards WHERE external_id = ? AND source = 'calendar'",
             rusqlite::params![event.id],
-            |r| r.get(0),
+            |r| Ok((r.get(0)?, r.get(1)?)),
         )
         .optional()
         .map_err(|e| e.to_string())?;
 
-    if let Some(card_id) = existing_id {
+    if let Some((card_id, existing_meta_str)) = existing {
+        // Build updated metadata, then layer in any ai_* fields from the
+        // existing row so that AI-generated content survives re-syncs.
+        let mut new_meta = serde_json::json!({
+            "start_time": event.start.date_time,
+            "end_time": event.end.date_time,
+            "description": event.description,
+        });
+        if let Some(s) = existing_meta_str {
+            if let Ok(existing_val) = serde_json::from_str::<serde_json::Value>(&s) {
+                if let (Some(new_obj), Some(existing_obj)) =
+                    (new_meta.as_object_mut(), existing_val.as_object())
+                {
+                    for key in ["ai_title", "ai_description", "ai_impact", "ai_hours"] {
+                        if let Some(v) = existing_obj.get(key) {
+                            new_obj.insert(key.to_string(), v.clone());
+                        }
+                    }
+                }
+            }
+        }
+        let update_metadata = new_meta.to_string();
         db.execute(
             "UPDATE cards SET title = ?, metadata = ?, day_of_week = ?, week_id = ?, \
              time_estimate = ?, updated_at = datetime('now') WHERE id = ?",
-            rusqlite::params![title, metadata, day_of_week, week_id, time_estimate, card_id],
+            rusqlite::params![title, update_metadata, day_of_week, week_id, time_estimate, card_id],
         )
         .map_err(|e| e.to_string())?;
+        Ok(Some(card_id))
     } else {
         db.execute(
             "INSERT INTO cards \
@@ -170,9 +202,8 @@ fn upsert_event(event: &GCalEvent, db: &Connection) -> Result<bool, String> {
             rusqlite::params![title, event.id, metadata, week_id, day_of_week, time_estimate],
         )
         .map_err(|e| e.to_string())?;
+        Ok(Some(db.last_insert_rowid()))
     }
-
-    Ok(true)
 }
 
 /// Assigns `position` values to all calendar cards so that within each

@@ -60,11 +60,13 @@ pub async fn sync_mrs(db_state: &DbState) -> Result<usize, String> {
 
     // Step 5: acquire DB lock and upsert each MR.
     let mut total_count = 0usize;
+    let mut card_ids: Vec<i64> = Vec::new();
     {
         let db = db_state.0.lock().map_err(|e| e.to_string())?;
         for (mr, role) in &merged {
-            if upsert_mr(mr, role, &db)? {
+            if let Some(id) = upsert_mr(mr, role, &db)? {
                 total_count += 1;
+                card_ids.push(id);
             }
         }
 
@@ -79,6 +81,12 @@ pub async fn sync_mrs(db_state: &DbState) -> Result<usize, String> {
             [],
         )
         .map_err(|e| format!("failed to update gitlab last_synced_at: {e}"))?;
+    } // DB lock released
+
+    for card_id in card_ids {
+        if let Err(e) = crate::ai::evaluate_card(card_id, db_state).await {
+            log::warn!("[sync_gitlab] AI eval failed for card {card_id}: {e}");
+        }
     }
 
     Ok(total_count)
@@ -90,34 +98,57 @@ pub async fn sync_mrs(db_state: &DbState) -> Result<usize, String> {
 /// updated_at) are touched — user placement (week_id, day_of_week) is
 /// preserved.
 ///
-/// Returns `true` when the row was written without error.
-fn upsert_mr(mr: &GitLabMR, role: &str, db: &Connection) -> Result<bool, String> {
+/// Returns `Some(card_id)` when the row was written, `None` on skip.
+fn upsert_mr(mr: &GitLabMR, role: &str, db: &Connection) -> Result<Option<i64>, String> {
     let external_id = format!("gitlab:{}:{}", mr.project_id, mr.iid);
 
     let metadata = serde_json::json!({
         "author": mr.author.username,
         "mr_iid": mr.iid,
         "role": role,
+        "description": mr.description,
     })
     .to_string();
 
-    let existing_id: Option<i64> = db
+    let existing: Option<(i64, Option<String>)> = db
         .query_row(
-            "SELECT id FROM cards WHERE external_id = ? AND source = 'gitlab'",
+            "SELECT id, metadata FROM cards WHERE external_id = ? AND source = 'gitlab'",
             rusqlite::params![external_id],
-            |r| r.get(0),
+            |r| Ok((r.get(0)?, r.get(1)?)),
         )
         .optional()
         .map_err(|e| e.to_string())?;
 
-    if let Some(card_id) = existing_id {
+    if let Some((card_id, existing_meta_str)) = existing {
         // Update mutable fields; preserve week_id / day_of_week.
+        // Merge ai_* fields from existing metadata so AI content survives re-syncs.
+        let mut merged = serde_json::json!({
+            "author": mr.author.username,
+            "mr_iid": mr.iid,
+            "role": role,
+            "description": mr.description,
+        });
+        if let Some(s) = existing_meta_str {
+            if let Ok(existing_val) = serde_json::from_str::<serde_json::Value>(&s) {
+                if let (Some(new_obj), Some(existing_obj)) =
+                    (merged.as_object_mut(), existing_val.as_object())
+                {
+                    for key in ["ai_title", "ai_description", "ai_impact", "ai_hours"] {
+                        if let Some(v) = existing_obj.get(key) {
+                            new_obj.insert(key.to_string(), v.clone());
+                        }
+                    }
+                }
+            }
+        }
+        let update_metadata = merged.to_string();
         db.execute(
             "UPDATE cards SET title = ?, url = ?, metadata = ?, \
              updated_at = datetime('now') WHERE id = ?",
-            rusqlite::params![mr.title, mr.web_url, metadata, card_id],
+            rusqlite::params![mr.title, mr.web_url, update_metadata, card_id],
         )
         .map_err(|e| format!("failed to update GitLab MR card {card_id}: {e}"))?;
+        Ok(Some(card_id))
     } else {
         // New MR — land in Backlog (week_id = NULL, day_of_week = NULL).
         db.execute(
@@ -128,9 +159,8 @@ fn upsert_mr(mr: &GitLabMR, role: &str, db: &Connection) -> Result<bool, String>
             rusqlite::params![mr.title, external_id, mr.web_url, metadata],
         )
         .map_err(|e| format!("failed to insert GitLab MR card: {e}"))?;
+        Ok(Some(db.last_insert_rowid()))
     }
-
-    Ok(true)
 }
 
 /// For every GitLab card that is not in `open_ids` (i.e. the MR is no longer

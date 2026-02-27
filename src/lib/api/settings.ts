@@ -6,6 +6,7 @@ export const getSettings = (): Promise<Settings> => invoke('get_settings');
 export const updateSettings = (fields: {
   availableHours?: number;
   aiProvider?: string;
+  autoAi?: boolean;
 }): Promise<Settings> => invoke('update_settings', fields);
 
 export const storeSecret = (service: string, key: string, value: string): Promise<void> =>
