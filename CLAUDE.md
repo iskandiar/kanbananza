@@ -14,6 +14,7 @@ Tauri v2 · SvelteKit + TypeScript · SQLite via rusqlite · keyring crate v3 ·
 - `docs` — inline docs, DECISIONS.md updates, docs/
 - `reviewer` — pre-commit review; read-only, outputs report
 - `architect` — hard architectural decisions only; uses opus; invoke sparingly
+- `prompt` — crafts and refines AI prompts in `src-tauri/src/ai/mod.rs`; owns system prompt calibration, user message construction, and signal selection per card type
 
 ## Commands
 ```bash
