@@ -20,6 +20,20 @@
     const w = boardStore.currentWeek;
     if (!w) return [];
     const monday = new Date(w.start_date);
+
+    // Compute today's ISO week start date
+    const today = new Date();
+    const todayMonday = new Date(today);
+    todayMonday.setDate(today.getDate() - ((today.getDay() + 6) % 7));
+    const todayWeekStart = [
+      todayMonday.getFullYear(),
+      String(todayMonday.getMonth() + 1).padStart(2, '0'),
+      String(todayMonday.getDate()).padStart(2, '0')
+    ].join('-');
+    const isCurrentWeek = w.start_date === todayWeekStart;
+    // today.getDay(): 0=Sun,1=Mon,...,6=Sat → DOW 1-5: ((day+6)%7)+1
+    const todayDOW = isCurrentWeek ? ((today.getDay() + 6) % 7) + 1 : null;
+
     return DAY_LABELS.map((label, i) => {
       const d = new Date(monday);
       d.setDate(monday.getDate() + i);
@@ -29,6 +43,7 @@
         date,
         dayOfWeek: i + 1,
         weekId: w.id,
+        isToday: todayDOW === i + 1,
         meetings: boardStore.meetingsByDay.get(i + 1) ?? [],
         tasks: boardStore.tasksByDay.get(i + 1) ?? []
       };

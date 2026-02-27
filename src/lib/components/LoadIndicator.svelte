@@ -1,21 +1,28 @@
 <script lang="ts">
-  let { scheduledHours, availableHours }: { scheduledHours: number; availableHours: number } = $props();
+  let { doneHours, plannedHours, availableHours }: { doneHours: number; plannedHours: number; availableHours: number } = $props();
 
-  const ratio = $derived(availableHours > 0 ? scheduledHours / availableHours : 0);
-  const pct = $derived(Math.min(ratio * 100, 100));
-  // green → amber → red as day fills
-  const barColor = $derived(
-    ratio > 0.9
-      ? 'bg-[var(--color-impact-high)]'
-      : ratio > 0.7
-        ? 'bg-[var(--color-impact-mid)]'
-        : 'bg-[var(--color-done)]'
-  );
+  const total = $derived(doneHours + plannedHours);
+  const donePct = $derived(availableHours > 0 ? Math.min((doneHours / availableHours) * 100, 100) : 0);
+  const plannedPct = $derived(availableHours > 0 ? Math.min((plannedHours / availableHours) * 100, Math.max(0, 100 - donePct)) : 0);
 </script>
 
 <div class="flex items-center gap-2 text-xs text-[var(--color-text-muted)]">
-  <div class="h-1 flex-1 rounded-full bg-[var(--color-border)]">
-    <div class="h-1 rounded-full transition-all {barColor}" style="width: {pct}%"></div>
+  <div class="h-1 flex-1 rounded-full bg-[var(--color-border)] overflow-hidden">
+    <div class="flex h-1">
+      <div
+        class="h-1 bg-[var(--color-done)] transition-all"
+        style="width: {donePct}%"
+      ></div>
+      <div
+        class="relative h-1 bg-[var(--color-done)] transition-all"
+        style="width: {plannedPct}%"
+      >
+        <div
+          class="absolute inset-0"
+          style="background: repeating-linear-gradient(-45deg, transparent, transparent 2px, rgba(0,0,0,0.25) 2px, rgba(0,0,0,0.25) 4px)"
+        ></div>
+      </div>
+    </div>
   </div>
-  <span>{scheduledHours.toFixed(1)}h / {availableHours}h</span>
+  <span>{total.toFixed(1)}h / {availableHours}h</span>
 </div>

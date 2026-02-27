@@ -73,114 +73,120 @@
   function focus(node: HTMLElement) {
     node.focus();
   }
+
+  function handleToggleDone() {
+    if (card.status !== 'done') {
+      onMarkDone(card.id);
+    } else {
+      boardStore.updateCard(card.id, { status: 'planned' });
+    }
+  }
 </script>
 
 <div
-  class="group rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 hover:border-[var(--color-accent)]/40 hover:bg-[var(--color-surface-raised)] transition-colors"
+  class="group flex flex-row gap-2 items-start rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 hover:border-[var(--color-accent)]/40 hover:bg-[var(--color-surface-raised)] transition-colors"
   class:cursor-grab={!isEditing}
   class:active:cursor-grabbing={!isEditing}
   class:cursor-default={isEditing}
   class:opacity-40={card.status === 'done'}
 >
-  {#if meetingTime}
-    <span class="text-xs text-[var(--color-muted)] mb-1 block">{meetingTime}</span>
-  {/if}
-  <p class="text-sm text-[var(--color-text)] leading-snug">{card.title}</p>
-  {#if aiFields.description}
-    <p class="text-xs text-[var(--color-muted)] mt-0.5 line-clamp-2 leading-snug">{aiFields.description}</p>
-  {/if}
-  <div class="mt-1.5 flex items-center gap-1.5 flex-wrap">
-    <span class="text-xs px-1.5 py-0.5 rounded {typeBadge[card.card_type]}">{card.card_type}</span>
-    {#if displayImpact}
-      <span class="text-xs {impactBadge[displayImpact]}">{displayImpact}</span>
-    {/if}
-    {#if card.time_estimate}
-      <span class="text-xs text-[var(--color-muted)]">{card.time_estimate}h</span>
-    {/if}
-    <div class="ml-auto flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-      {#if card.url}
-        <button
-          onclick={(e) => { e.stopPropagation(); if (card.url) openUrl(card.url); }}
-          class="text-xs text-[var(--color-muted)] hover:text-[var(--color-accent-hover)]"
-          aria-label="Open link"
-          title="Open link"
-        >↗</button>
-      {/if}
-      {#if !isEditing}
-        <button
-          onclick={startEdit}
-          class="text-xs text-[var(--color-muted)] hover:text-[var(--color-accent-hover)] transition-colors"
-          aria-label="Edit card"
-          title="Edit card"
-        >✎</button>
-        {#if card.status !== 'done'}
-          <button
-            onclick={() => onMarkDone(card.id)}
-            class="text-xs text-[var(--color-muted)] hover:text-[var(--color-done)] transition-colors"
-            aria-label="Mark done"
-            title="Mark done"
-          >✓</button>
-        {:else}
-          <button
-            onclick={() => boardStore.updateCard(card.id, { status: 'planned' })}
-            class="text-xs text-[var(--color-muted)] hover:text-[var(--color-impact-mid)] transition-colors"
-            aria-label="Undo done"
-            title="Undo"
-          >↩</button>
-        {/if}
-      {/if}
-    </div>
-  </div>
+  <button
+    data-no-dnd="true"
+    onclick={handleToggleDone}
+    class="flex-shrink-0 mt-0.5 w-4 h-4 rounded-full border transition-colors flex items-center justify-center {card.status === 'done' ? 'border-[var(--color-done)] bg-[var(--color-done)]/20 text-[var(--color-done)]' : 'border-[var(--color-border)] text-transparent hover:border-[var(--color-done)]/60'}"
+    aria-label={card.status === 'done' ? 'Undo done' : 'Mark done'}
+  ><span class="text-xs">✓</span></button>
 
-  {#if isEditing}
-    <form
-      data-no-dnd="true"
-      class="mt-2 flex flex-col gap-1.5"
-      onsubmit={(e) => { e.preventDefault(); saveEdit(); }}
-    >
-      <input
-        type="text"
-        bind:value={editTitle}
-        use:focus
-        class="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded px-2 py-1 text-xs text-[var(--color-text)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
-        onkeydown={(e) => { if (e.key === 'Escape') cancelEdit(); }}
-      />
-      <div class="flex gap-1.5">
-        {#each ['low', 'mid', 'high'] as level}
+  <div class="flex-1 min-w-0">
+    {#if meetingTime}
+      <span class="text-xs text-[var(--color-muted)] mb-1 block">{meetingTime}</span>
+    {/if}
+    <p class="text-sm text-[var(--color-text)] leading-snug">{card.title}</p>
+    {#if aiFields.description}
+      <p
+        data-no-dnd="true"
+        class="text-xs text-[var(--color-muted)] mt-0.5 leading-snug overflow-hidden max-h-[2.4em] hover:max-h-40 transition-[max-height] duration-300 ease-in-out cursor-default"
+      >{aiFields.description}</p>
+    {/if}
+    <div class="mt-1.5 flex items-center gap-1.5 flex-wrap">
+      <span class="text-xs px-1.5 py-0.5 rounded {typeBadge[card.card_type]}">{card.card_type}</span>
+      {#if displayImpact}
+        <span class="text-xs {impactBadge[displayImpact]}">{displayImpact}</span>
+      {/if}
+      {#if card.time_estimate}
+        <span class="text-xs text-[var(--color-muted)]">{card.time_estimate}h</span>
+      {/if}
+      <div class="ml-auto flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+        {#if card.url}
+          <button
+            onclick={(e) => { e.stopPropagation(); if (card.url) openUrl(card.url); }}
+            class="text-xs text-[var(--color-muted)] hover:text-[var(--color-accent-hover)]"
+            aria-label="Open link"
+            title="Open link"
+          >↗</button>
+        {/if}
+        {#if !isEditing}
+          <button
+            onclick={startEdit}
+            class="text-xs text-[var(--color-muted)] hover:text-[var(--color-accent-hover)] transition-colors"
+            aria-label="Edit card"
+            title="Edit card"
+          >✎</button>
+        {/if}
+      </div>
+    </div>
+
+    {#if isEditing}
+      <form
+        data-no-dnd="true"
+        class="mt-2 flex flex-col gap-1.5"
+        onsubmit={(e) => { e.preventDefault(); saveEdit(); }}
+      >
+        <input
+          type="text"
+          bind:value={editTitle}
+          use:focus
+          class="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded px-2 py-1 text-xs text-[var(--color-text)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+          onkeydown={(e) => { if (e.key === 'Escape') cancelEdit(); }}
+        />
+        <p class="text-xs text-[var(--color-muted)]">Priority</p>
+        <div class="flex gap-1.5">
+          {#each ['low', 'mid', 'high'] as level}
+            <button
+              type="button"
+              onclick={() => { editImpact = editImpact === level ? '' : level; }}
+              class="flex-1 text-xs py-0.5 rounded border transition-colors {editImpact === level ? 'border-[var(--color-accent)]/60 text-[var(--color-accent)] bg-[var(--color-accent)]/10' : 'border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]'}"
+            >{level}</button>
+          {/each}
+        </div>
+        <input
+          type="number"
+          bind:value={editHours}
+          step="0.5"
+          min="0"
+          placeholder="hours"
+          class="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded px-2 py-1 text-xs text-[var(--color-text)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+          onkeydown={(e) => { if (e.key === 'Escape') cancelEdit(); }}
+        />
+        <input
+          type="text"
+          bind:value={editUrl}
+          placeholder="https://…"
+          class="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded px-2 py-1 text-xs text-[var(--color-text)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+          onkeydown={(e) => { if (e.key === 'Escape') cancelEdit(); }}
+        />
+        <div class="flex gap-1.5">
+          <button
+            type="submit"
+            class="flex-1 text-xs py-1 rounded bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white transition-colors"
+          >Save</button>
           <button
             type="button"
-            onclick={() => { editImpact = editImpact === level ? '' : level; }}
-            class="flex-1 text-xs py-0.5 rounded border transition-colors {editImpact === level ? 'border-[var(--color-accent)]/60 text-[var(--color-accent)] bg-[var(--color-accent)]/10' : 'border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]'}"
-          >{level}</button>
-        {/each}
-      </div>
-      <input
-        type="number"
-        bind:value={editHours}
-        step="0.5"
-        min="0"
-        placeholder="hours"
-        class="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded px-2 py-1 text-xs text-[var(--color-text)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
-        onkeydown={(e) => { if (e.key === 'Escape') cancelEdit(); }}
-      />
-      <input
-        type="text"
-        bind:value={editUrl}
-        placeholder="https://…"
-        class="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded px-2 py-1 text-xs text-[var(--color-text)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
-        onkeydown={(e) => { if (e.key === 'Escape') cancelEdit(); }}
-      />
-      <div class="flex gap-1.5">
-        <button
-          type="submit"
-          class="flex-1 text-xs py-1 rounded bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white transition-colors"
-        >Save</button>
-        <button
-          type="button"
-          onclick={cancelEdit}
-          class="flex-1 text-xs py-1 rounded border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] transition-colors"
-        >Cancel</button>
-      </div>
-    </form>
-  {/if}
+            onclick={cancelEdit}
+            class="flex-1 text-xs py-1 rounded border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] transition-colors"
+          >Cancel</button>
+        </div>
+      </form>
+    {/if}
+  </div>
 </div>
