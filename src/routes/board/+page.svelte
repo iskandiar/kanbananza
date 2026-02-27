@@ -11,6 +11,20 @@
     await Promise.all([boardStore.loadCurrentWeek(), settingsStore.load()]);
   });
 
+  const isCurrentWeek = $derived(() => {
+    const w = boardStore.currentWeek;
+    if (!w) return true;
+    const today = new Date();
+    const todayMonday = new Date(today);
+    todayMonday.setDate(today.getDate() - ((today.getDay() + 6) % 7));
+    const todayWeekStart = [
+      todayMonday.getFullYear(),
+      String(todayMonday.getMonth() + 1).padStart(2, '0'),
+      String(todayMonday.getDate()).padStart(2, '0')
+    ].join('-');
+    return w.start_date === todayWeekStart;
+  });
+
   const weekLabel = $derived(() => {
     const w = boardStore.currentWeek;
     if (!w) return '…';
@@ -21,19 +35,9 @@
     const w = boardStore.currentWeek;
     if (!w) return [];
     const monday = new Date(w.start_date);
-
-    // Compute today's ISO week start date
     const today = new Date();
-    const todayMonday = new Date(today);
-    todayMonday.setDate(today.getDate() - ((today.getDay() + 6) % 7));
-    const todayWeekStart = [
-      todayMonday.getFullYear(),
-      String(todayMonday.getMonth() + 1).padStart(2, '0'),
-      String(todayMonday.getDate()).padStart(2, '0')
-    ].join('-');
-    const isCurrentWeek = w.start_date === todayWeekStart;
     // today.getDay(): 0=Sun,1=Mon,...,6=Sat → DOW 1-5: ((day+6)%7)+1
-    const todayDOW = isCurrentWeek ? ((today.getDay() + 6) % 7) + 1 : null;
+    const todayDOW = isCurrentWeek() ? ((today.getDay() + 6) % 7) + 1 : null;
 
     return DAY_LABELS.map((label, i) => {
       const d = new Date(monday);
@@ -85,8 +89,10 @@
     days={days()}
     backlogCards={boardStore.backlog}
     availableHours={settingsStore.availableHours}
+    isCurrentWeek={isCurrentWeek()}
     onPrevWeek={() => boardStore.navigateWeek(-1)}
     onNextWeek={() => boardStore.navigateWeek(1)}
+    onJumpToToday={() => boardStore.loadCurrentWeek()}
     onAddCard={handleAddCard}
     onMoveCard={handleMoveCard}
     onMarkDone={(id) => boardStore.markDone(id)}

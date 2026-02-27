@@ -9,8 +9,10 @@
     days,
     backlogCards = [],
     availableHours,
+    isCurrentWeek = true,
     onPrevWeek,
     onNextWeek,
+    onJumpToToday,
     onAddCard,
     onMoveCard,
     onMarkDone,
@@ -21,8 +23,10 @@
     days: Array<{ label: string; date: string; dayOfWeek: number; weekId: number | null; isToday: boolean; meetings: Card[]; tasks: Card[] }>;
     backlogCards: Card[];
     availableHours: number;
+    isCurrentWeek: boolean;
     onPrevWeek: () => void;
     onNextWeek: () => void;
+    onJumpToToday: () => void;
     onAddCard: (dayOfWeek: number | null, title: string) => void;
     onMoveCard: (cardId: number, weekId: number | null, dayOfWeek: number | null, position: number) => void;
     onMarkDone: (cardId: number) => void;
@@ -38,7 +42,7 @@
 </script>
 
 <div class="flex flex-col h-screen bg-[var(--color-background)] text-[var(--color-text)]">
-  <WeekHeader {weekLabel} onPrev={onPrevWeek} onNext={onNextWeek} {onRollover} {unfinishedCount} />
+  <WeekHeader {weekLabel} onPrev={onPrevWeek} onNext={onNextWeek} {isCurrentWeek} {onJumpToToday} {onRollover} {unfinishedCount} />
 
   <div class="flex flex-1 min-h-0">
     <div class="flex flex-1 min-w-0 overflow-x-auto">

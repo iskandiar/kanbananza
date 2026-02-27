@@ -4,10 +4,12 @@
   let {
     weekLabel,
     unfinishedCount,
+    isCurrentWeek = true,
     onPrev,
     onNext,
+    onJumpToToday,
     onRollover
-  }: { weekLabel: string; unfinishedCount: number; onPrev: () => void; onNext: () => void; onRollover: () => void } = $props();
+  }: { weekLabel: string; unfinishedCount: number; isCurrentWeek: boolean; onPrev: () => void; onNext: () => void; onJumpToToday: () => void; onRollover: () => void } = $props();
 
   let rolloverConfirming = $state(false);
 </script>
@@ -29,6 +31,13 @@
     >
       →
     </button>
+    {#if !isCurrentWeek}
+      <button
+        onclick={onJumpToToday}
+        class="text-xs px-2 py-0.5 rounded border border-[var(--color-accent)]/60 text-[var(--color-accent)] hover:bg-[var(--color-accent)]/10 transition-colors"
+        title="Jump to current week"
+      >Today</button>
+    {/if}
   </div>
 
   <div class="flex items-center gap-2">

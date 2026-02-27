@@ -13,6 +13,23 @@
     review:  'bg-slate-500/15 text-slate-300'
   };
 
+  const typeIcon: Record<string, string> = {
+    meeting:       '⊙',
+    mr:            '⎇',
+    thread:        '⌘',
+    task:          '◻',
+    review:        '◈',
+    documentation: '≡'
+  };
+
+  const sourceLabel: Record<string, string> = {
+    calendar: 'GCal',
+    gitlab:   'GL',
+    linear:   'LN',
+    slack:    'SL',
+    notion:   'NT'
+  };
+
   const impactBadge: Record<string, string> = {
     low:  'text-[var(--color-impact-low)]  bg-[var(--color-impact-low-bg)]  px-1.5 py-0.5 rounded',
     mid:  'text-[var(--color-impact-mid)]  bg-[var(--color-impact-mid-bg)]  px-1.5 py-0.5 rounded',
@@ -47,6 +64,7 @@
   let editImpact = $state('');
   let editHours = $state('');
   let editUrl = $state('');
+  let confirmingDelete = $state(false);
 
   function startEdit() {
     editTitle = card.title;
@@ -58,6 +76,7 @@
 
   function cancelEdit() {
     isEditing = false;
+    confirmingDelete = false;
   }
 
   async function saveEdit() {
@@ -101,7 +120,7 @@
     {#if meetingTime}
       <span class="text-xs text-[var(--color-muted)] mb-1 block">{meetingTime}</span>
     {/if}
-    <p class="text-sm text-[var(--color-text)] leading-snug">{card.title}</p>
+    <p class="text-sm text-[var(--color-text)] leading-snug">{isEditing ? editTitle : card.title}</p>
     {#if aiFields.description}
       <p
         data-no-dnd="true"
@@ -109,7 +128,13 @@
       >{aiFields.description}</p>
     {/if}
     <div class="mt-1.5 flex items-center gap-1.5 flex-wrap">
-      <span class="text-xs px-1.5 py-0.5 rounded {typeBadge[card.card_type]}">{card.card_type}</span>
+      <span class="text-xs px-1.5 py-0.5 rounded {typeBadge[card.card_type]}">{typeIcon[card.card_type] ?? ''} {card.card_type}</span>
+      {#if card.source !== 'manual' && sourceLabel[card.source]}
+        <span
+          class="text-[10px] px-1 py-0.5 rounded bg-[var(--color-surface-raised)] text-[var(--color-muted)] border border-[var(--color-border)]"
+          title="Synced from {card.source}"
+        >{sourceLabel[card.source]}</span>
+      {/if}
       {#if displayImpact}
         <span class="text-xs {impactBadge[displayImpact]}">{displayImpact}</span>
       {/if}
@@ -162,7 +187,7 @@
         <input
           type="number"
           bind:value={editHours}
-          step="0.5"
+          step="any"
           min="0"
           placeholder="hours"
           class="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded px-2 py-1 text-xs text-[var(--color-text)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
@@ -186,6 +211,27 @@
             class="flex-1 text-xs py-1 rounded border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] transition-colors"
           >Cancel</button>
         </div>
+        {#if !confirmingDelete}
+          <button
+            type="button"
+            onclick={() => (confirmingDelete = true)}
+            class="text-xs text-[var(--color-muted)] hover:text-rose-400 transition-colors text-left"
+          >Delete card</button>
+        {:else}
+          <div class="flex items-center gap-1.5">
+            <span class="text-xs text-[var(--color-muted)]">Delete card?</span>
+            <button
+              type="button"
+              onclick={async () => { await boardStore.deleteCard(card.id); isEditing = false; }}
+              class="text-xs px-2 py-0.5 rounded border border-rose-500/60 text-rose-400 hover:bg-rose-500/10 transition-colors"
+            >Yes</button>
+            <button
+              type="button"
+              onclick={() => (confirmingDelete = false)}
+              class="text-xs px-2 py-0.5 rounded border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] transition-colors"
+            >No</button>
+          </div>
+        {/if}
       </form>
     {/if}
   </div>
