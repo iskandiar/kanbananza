@@ -10,16 +10,16 @@
   <div class="h-1 flex-1 rounded-full bg-[var(--color-border)] overflow-hidden">
     <div class="flex h-1">
       <div
-        class="h-1 bg-[var(--color-done)] transition-all"
+        class="h-1 bg-emerald-500 transition-all"
         style="width: {donePct}%"
       ></div>
       <div
-        class="relative h-1 bg-[var(--color-done)] transition-all"
+        class="relative h-1 bg-amber-500 transition-all"
         style="width: {plannedPct}%"
       >
         <div
           class="absolute inset-0"
-          style="background: repeating-linear-gradient(-45deg, transparent, transparent 2px, rgba(0,0,0,0.25) 2px, rgba(0,0,0,0.25) 4px)"
+          style="background: repeating-linear-gradient(-45deg, transparent, transparent 2px, rgba(255,255,255,0.3) 2px, rgba(255,255,255,0.3) 4px)"
         ></div>
       </div>
     </div>
