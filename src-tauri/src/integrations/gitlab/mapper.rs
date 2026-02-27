@@ -3,7 +3,7 @@ use std::collections::HashMap;
 
 use crate::db::DbState;
 use crate::integrations::gitlab::client::{
-    fetch_authored_mrs, fetch_review_mrs, get_current_user, GitLabMR,
+    fetch_authored_mrs, fetch_mr_lines_changed, fetch_review_mrs, get_current_user, GitLabMR,
 };
 
 /// Syncs GitLab MRs (both authored and assigned-for-review) into the local
@@ -51,11 +51,19 @@ pub async fn sync_mrs(db_state: &DbState) -> Result<usize, String> {
         mr_map.insert(mr.id, (mr, "author"));
     }
 
-    // Collect the deduplicated list and build the set of open external_ids.
+    // Collect the deduplicated list.
     let merged: Vec<(&GitLabMR, &str)> = mr_map.into_values().collect();
-    let open_ids: Vec<String> = merged
+
+    // Fetch line counts for each deduplicated MR (sequential; fire-and-forget on error).
+    let mut merged_with_lines: Vec<(&GitLabMR, &str, i64)> = Vec::with_capacity(merged.len());
+    for (mr, role) in &merged {
+        let lines = fetch_mr_lines_changed(&pat, mr.project_id, mr.iid).await;
+        merged_with_lines.push((mr, role, lines));
+    }
+
+    let open_ids: Vec<String> = merged_with_lines
         .iter()
-        .map(|(mr, _)| format!("gitlab:{}:{}", mr.project_id, mr.iid))
+        .map(|(mr, _, _)| format!("gitlab:{}:{}", mr.project_id, mr.iid))
         .collect();
 
     // Step 5: acquire DB lock and upsert each MR.
@@ -63,8 +71,8 @@ pub async fn sync_mrs(db_state: &DbState) -> Result<usize, String> {
     let mut card_ids: Vec<i64> = Vec::new();
     {
         let db = db_state.0.lock().map_err(|e| e.to_string())?;
-        for (mr, role) in &merged {
-            if let Some(id) = upsert_mr(mr, role, &db)? {
+        for (mr, role, lines_changed) in &merged_with_lines {
+            if let Some(id) = upsert_mr(mr, role, *lines_changed, &db)? {
                 total_count += 1;
                 card_ids.push(id);
             }
@@ -99,7 +107,7 @@ pub async fn sync_mrs(db_state: &DbState) -> Result<usize, String> {
 /// preserved.
 ///
 /// Returns `Some(card_id)` when the row was written, `None` on skip.
-fn upsert_mr(mr: &GitLabMR, role: &str, db: &Connection) -> Result<Option<i64>, String> {
+fn upsert_mr(mr: &GitLabMR, role: &str, lines_changed: i64, db: &Connection) -> Result<Option<i64>, String> {
     let external_id = format!("gitlab:{}:{}", mr.project_id, mr.iid);
 
     let metadata = serde_json::json!({
@@ -107,6 +115,7 @@ fn upsert_mr(mr: &GitLabMR, role: &str, db: &Connection) -> Result<Option<i64>, 
         "mr_iid": mr.iid,
         "role": role,
         "description": mr.description,
+        "lines_changed": lines_changed,
     })
     .to_string();
 
@@ -127,6 +136,7 @@ fn upsert_mr(mr: &GitLabMR, role: &str, db: &Connection) -> Result<Option<i64>, 
             "mr_iid": mr.iid,
             "role": role,
             "description": mr.description,
+            "lines_changed": lines_changed,
         });
         if let Some(s) = existing_meta_str {
             if let Ok(existing_val) = serde_json::from_str::<serde_json::Value>(&s) {

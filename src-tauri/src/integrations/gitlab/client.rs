@@ -108,3 +108,46 @@ pub async fn fetch_review_mrs(pat: &str, user_id: i64) -> Result<Vec<GitLabMR>, 
         .await
         .map_err(|e| format!("failed to parse GitLab review MRs response: {e}"))
 }
+
+/// Fetches the total lines changed (additions + deletions) for a single MR
+/// by parsing the unified diff from `GET /projects/:id/merge_requests/:iid/diffs`.
+///
+/// Returns 0 on any non-fatal error (binary files, empty MRs, API hiccup) so
+/// the caller can always continue.
+pub async fn fetch_mr_lines_changed(pat: &str, project_id: i64, iid: i64) -> i64 {
+    #[derive(serde::Deserialize)]
+    struct DiffFile {
+        #[serde(default)]
+        diff: String,
+    }
+
+    let client = reqwest::Client::new();
+    let resp = match client
+        .get(format!("{BASE}/projects/{project_id}/merge_requests/{iid}/diffs"))
+        .header("PRIVATE-TOKEN", pat)
+        .query(&[("per_page", "100")])
+        .send()
+        .await
+    {
+        Ok(r) => r,
+        Err(_) => return 0,
+    };
+
+    if !resp.status().is_success() {
+        return 0;
+    }
+
+    let files: Vec<DiffFile> = match resp.json().await {
+        Ok(f) => f,
+        Err(_) => return 0,
+    };
+
+    files
+        .iter()
+        .flat_map(|f| f.diff.lines())
+        .filter(|l| {
+            (l.starts_with('+') && !l.starts_with("+++"))
+                || (l.starts_with('-') && !l.starts_with("---"))
+        })
+        .count() as i64
+}

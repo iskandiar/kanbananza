@@ -80,7 +80,11 @@ pub async fn evaluate_card(card_id: i64, db_state: &DbState) -> Result<(), Strin
 
     // Phase B: AI call (no DB lock held)
     let system = "JSON only. Keys: ai_title (<=6 words), ai_description (1-2 sentences), \
-                  ai_impact (high|medium|low), ai_hours (number, omit for meetings).";
+                  ai_impact (high|medium|low), \
+                  ai_hours (realistic decimal hours — calibrate by lines changed: \
+                  1-5 lines=0.1, 6-30 lines=0.25, 31-100 lines=0.5, \
+                  101-300 lines=1, 301-600 lines=2, 600+ lines=3+; \
+                  omit for meetings).";
 
     let metadata_val: serde_json::Value = metadata_str
         .as_deref()
@@ -93,11 +97,15 @@ pub async fn evaluate_card(card_id: i64, db_state: &DbState) -> Result<(), Strin
                 .get("description")
                 .and_then(|d| d.as_str())
                 .unwrap_or("");
-            let loc = metadata_val
-                .get("changes_additions")
+            let lines = metadata_val
+                .get("lines_changed")
                 .and_then(|v| v.as_i64())
                 .unwrap_or(0);
-            format!("MR: {title}\nDescription: {desc}\nChanged lines: {loc}")
+            if desc.is_empty() {
+                format!("MR: {title}\nLines changed: {lines}")
+            } else {
+                format!("MR: {title}\nLines changed: {lines}\nDescription: {desc}")
+            }
         }
         "meeting" => {
             let desc = metadata_val
@@ -134,7 +142,9 @@ pub async fn evaluate_card(card_id: i64, db_state: &DbState) -> Result<(), Strin
 
     let new_metadata = serde_json::to_string(&merged).map_err(|e| e.to_string())?;
 
-    // Phase C: save merged metadata
+    // Phase C: save merged metadata; seed time_estimate from ai_hours when not yet set.
+    // Meetings are excluded — their duration comes from the calendar event.
+    let ai_hours = ai_fields.get("ai_hours").and_then(|v| v.as_f64());
     {
         let db = db_state.0.lock().map_err(|e| e.to_string())?;
         db.execute(
@@ -142,6 +152,15 @@ pub async fn evaluate_card(card_id: i64, db_state: &DbState) -> Result<(), Strin
             rusqlite::params![new_metadata, card_id],
         )
         .map_err(|e| format!("evaluate_card: failed to update card {card_id}: {e}"))?;
+        if card_type != "meeting" {
+            if let Some(hours) = ai_hours {
+                db.execute(
+                    "UPDATE cards SET time_estimate=? WHERE id=? AND time_estimate IS NULL",
+                    rusqlite::params![hours, card_id],
+                )
+                .map_err(|e| format!("evaluate_card: failed to seed time_estimate for card {card_id}: {e}"))?;
+            }
+        }
     }
 
     Ok(())
