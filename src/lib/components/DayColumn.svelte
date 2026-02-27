@@ -31,16 +31,25 @@
     onMarkDone: (cardId: number) => void;
   } = $props();
 
-  const doneTaskHours = $derived(tasks.filter(t => t.status === 'done').reduce((sum, t) => sum + (t.time_estimate ?? 0), 0));
-  const plannedTaskHours = $derived(tasks.filter(t => t.status !== 'done').reduce((sum, t) => sum + (t.time_estimate ?? 0), 0));
+  // Include both tasks and meetings in load calculation
+  const doneHoursByType = $derived(
+    [...tasks.filter(t => t.status === 'done'), ...meetings.filter(m => m.status === 'done')].reduce((sum, c) => sum + (c.time_estimate ?? 0), 0)
+  );
+  const plannedHoursByType = $derived(
+    [...tasks.filter(t => t.status !== 'done'), ...meetings.filter(m => m.status !== 'done')].reduce((sum, c) => sum + (c.time_estimate ?? 0), 0)
+  );
 
   // Pending tasks for DnD zone
   let localPendingTasks = $state<Card[]>([]);
   $effect(() => { localPendingTasks = tasks.filter(t => t.status !== 'done'); });
 
-  // Done tasks for collapsed section
+  // Done and pending tasks/meetings for collapsed section
   const doneTasks = $derived(tasks.filter(t => t.status === 'done'));
-  const doneHours = $derived(doneTasks.reduce((sum, t) => sum + (t.time_estimate ?? 0), 0));
+  const doneMeetings = $derived(meetings.filter(m => m.status === 'done'));
+  const pendingMeetings = $derived(meetings.filter(m => m.status !== 'done'));
+  const doneHours = $derived(
+    [...doneTasks, ...doneMeetings].reduce((sum, c) => sum + (c.time_estimate ?? 0), 0)
+  );
   let showDone = $state(false);
 
   function handleDndConsider(e: CustomEvent<{ items: Card[] }>) {
@@ -71,11 +80,11 @@
       class:text-[var(--color-accent)]={isToday}
     >{date}</p>
   </div>
-  <LoadIndicator doneHours={doneTaskHours} plannedHours={plannedTaskHours} {availableHours} />
+  <LoadIndicator doneHours={doneHoursByType} plannedHours={plannedHoursByType} {availableHours} />
 
-  {#if meetings.length}
+  {#if pendingMeetings.length}
     <div class="flex flex-col gap-1.5">
-      {#each meetings as card (card.id)}
+      {#each pendingMeetings as card (card.id)}
         <CardComponent {card} {onMarkDone} />
       {/each}
     </div>
@@ -96,16 +105,19 @@
     {/each}
   </div>
 
-  {#if doneTasks.length > 0}
+  {#if doneTasks.length + doneMeetings.length > 0}
     <div>
       <button
         onclick={() => (showDone = !showDone)}
         class="text-xs text-[var(--color-muted)] hover:text-[var(--color-text)] transition-colors"
       >
-        {showDone ? '▾' : '▸'} {doneTasks.length} done · {doneHours.toFixed(1)}h consumed
+        {showDone ? '▾' : '▸'} {doneTasks.length + doneMeetings.length} done · {doneHours.toFixed(1)}h consumed
       </button>
       {#if showDone}
         <div class="flex flex-col gap-1.5 mt-1.5">
+          {#each doneMeetings as card (card.id)}
+            <CardComponent {card} {onMarkDone} />
+          {/each}
           {#each doneTasks as card (card.id)}
             <CardComponent {card} {onMarkDone} />
           {/each}

@@ -14,14 +14,9 @@
         style="width: {donePct}%"
       ></div>
       <div
-        class="relative h-1 bg-amber-500 transition-all"
+        class="h-1 bg-amber-500 transition-all"
         style="width: {plannedPct}%"
-      >
-        <div
-          class="absolute inset-0"
-          style="background: repeating-linear-gradient(-45deg, transparent, transparent 2px, rgba(255,255,255,0.3) 2px, rgba(255,255,255,0.3) 4px)"
-        ></div>
-      </div>
+      ></div>
     </div>
   </div>
   <span>{total.toFixed(1)}h / {availableHours}h</span>
