@@ -10,7 +10,8 @@
     onAddCard,
     onClose,
     onMoveCard,
-    onMarkDone
+    onMarkDone,
+    onCardCreated
   }: {
     cards: Card[];
     isOpen: boolean;
@@ -18,6 +19,7 @@
     onClose: () => void;
     onMoveCard: (cardId: number, weekId: number | null, dayOfWeek: number | null, position: number) => void;
     onMarkDone: (cardId: number) => void;
+    onCardCreated?: (card: Card) => void;
   } = $props();
 
   let localCards = $state<Card[]>([]);
@@ -54,7 +56,7 @@
 
   {#if isOpen}
     <div class="px-3 py-2 border-b border-[var(--color-border)]">
-      <QuickAdd onAdd={onAddCard} />
+      <QuickAdd onAdd={onAddCard} weekId={null} dayOfWeek={null} {onCardCreated} />
     </div>
   {/if}
 

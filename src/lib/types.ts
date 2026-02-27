@@ -1,6 +1,6 @@
 // src/lib/types.ts
 
-export type CardType = 'meeting' | 'mr' | 'thread' | 'task' | 'review';
+export type CardType = 'meeting' | 'mr' | 'thread' | 'task' | 'review' | 'documentation';
 export type CardStatus = 'planned' | 'done';
 export type Impact = 'low' | 'mid' | 'high';
 export type Source = 'manual' | 'calendar' | 'gitlab' | 'linear' | 'slack' | 'notion';

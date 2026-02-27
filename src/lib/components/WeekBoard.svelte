@@ -14,7 +14,8 @@
     onAddCard,
     onMoveCard,
     onMarkDone,
-    onRollover
+    onRollover,
+    onCardCreated
   }: {
     weekLabel: string;
     days: Array<{ label: string; date: string; dayOfWeek: number; weekId: number | null; isToday: boolean; meetings: Card[]; tasks: Card[] }>;
@@ -26,6 +27,7 @@
     onMoveCard: (cardId: number, weekId: number | null, dayOfWeek: number | null, position: number) => void;
     onMarkDone: (cardId: number) => void;
     onRollover: () => void;
+    onCardCreated?: (card: Card) => void;
   } = $props();
 
   let backlogOpen = $state(false);
@@ -53,6 +55,7 @@
           onAddCard={(title: string) => onAddCard(day.dayOfWeek, title)}
           {onMoveCard}
           {onMarkDone}
+          {onCardCreated}
         />
       {/each}
     </div>
@@ -64,6 +67,7 @@
       onClose={() => (backlogOpen = false)}
       {onMoveCard}
       {onMarkDone}
+      {onCardCreated}
     />
 
     {#if !backlogOpen}

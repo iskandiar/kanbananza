@@ -16,7 +16,8 @@
     isToday = false,
     onAddCard,
     onMoveCard,
-    onMarkDone
+    onMarkDone,
+    onCardCreated
   }: {
     label: string;
     date: string;
@@ -29,6 +30,7 @@
     onAddCard: (title: string) => void;
     onMoveCard: (cardId: number, weekId: number | null, dayOfWeek: number | null, position: number) => void;
     onMarkDone: (cardId: number) => void;
+    onCardCreated?: (card: Card) => void;
   } = $props();
 
   // Include both tasks and meetings in load calculation
@@ -126,5 +128,5 @@
     </div>
   {/if}
 
-  <QuickAdd onAdd={onAddCard} />
+  <QuickAdd onAdd={onAddCard} {weekId} {dayOfWeek} {onCardCreated} />
 </div>

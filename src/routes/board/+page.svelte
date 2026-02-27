@@ -3,6 +3,7 @@
   import WeekBoard from '$lib/components/WeekBoard.svelte';
   import { boardStore } from '$lib/stores/board.svelte';
   import { settingsStore } from '$lib/stores/settings.svelte';
+  import type { Card } from '$lib/types';
 
   const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
 
@@ -64,6 +65,10 @@
   ) {
     await boardStore.moveCard(cardId, weekId, dayOfWeek, position);
   }
+
+  function handleCardCreated(card: Card) {
+    boardStore.cards = [...boardStore.cards, card];
+  }
 </script>
 
 {#if boardStore.error}
@@ -86,5 +91,6 @@
     onMoveCard={handleMoveCard}
     onMarkDone={(id) => boardStore.markDone(id)}
     onRollover={() => boardStore.rollover()}
+    onCardCreated={handleCardCreated}
   />
 {/if}

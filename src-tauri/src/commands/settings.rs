@@ -54,3 +54,11 @@ pub fn update_settings(
         .map_err(|e| e.to_string())?;
     Ok(settings)
 }
+
+#[tauri::command]
+pub fn backup_database(state: State<DbState>, path: String) -> Result<(), String> {
+    let conn = state.0.lock().map_err(|e| e.to_string())?;
+    let escaped = path.replace('\'', "''");
+    conn.execute_batch(&format!("VACUUM INTO '{}'", escaped))
+        .map_err(|e| e.to_string())
+}

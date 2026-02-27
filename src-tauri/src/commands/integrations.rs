@@ -239,3 +239,88 @@ pub async fn disconnect_gitlab(state: State<'_, DbState>) -> Result<(), String> 
         .map_err(|e| e.to_string())?;
     Ok(())
 }
+
+// ---------------------------------------------------------------------------
+// Linear integration commands
+// ---------------------------------------------------------------------------
+
+use crate::integrations::linear;
+
+/// Pulls open Linear issues assigned to the user and upserts them as `task`
+/// cards in the local backlog.
+/// Emits `"linear://synced"` with { count, error } on completion.
+#[tauri::command]
+pub async fn sync_linear(
+    state: State<'_, DbState>,
+    app: AppHandle,
+) -> Result<(), String> {
+    match linear::sync_issues(&state).await {
+        Ok(count) => {
+            app.emit("linear://synced", SyncResult { count, error: None })
+                .map_err(|e| e.to_string())?;
+            Ok(())
+        }
+        Err(e) => {
+            let _ = app.emit(
+                "linear://synced",
+                SyncResult { count: 0, error: Some(e.clone()) },
+            );
+            Err(e)
+        }
+    }
+}
+
+/// Removes the Linear API key from local storage and clears the integrations row.
+#[tauri::command]
+pub async fn disconnect_linear(state: State<'_, DbState>) -> Result<(), String> {
+    let db = state.0.lock().map_err(|e| e.to_string())?;
+    db.execute("DELETE FROM secrets WHERE key = 'linear_api_key'", [])
+        .map_err(|e| e.to_string())?;
+    db.execute("DELETE FROM integrations WHERE id='linear'", [])
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Universal URL-to-card command
+// ---------------------------------------------------------------------------
+
+use crate::integrations::{notion, slack};
+use crate::types::Card;
+
+/// Creates a card from a recognised integration URL.
+///
+/// Supported URL patterns (checked in order):
+/// 1. `linear.app` + `/issue/` — fetches the Linear issue by identifier
+/// 2. `notion.so` or `notion.com` — fetches the Notion page
+/// 3. `*.slack.com/archives/` — fetches the Slack thread
+///
+/// Returns the upserted `Card` on success.
+#[tauri::command]
+pub async fn create_card_from_url(
+    state: State<'_, DbState>,
+    _app: AppHandle,
+    url: String,
+    week_id: Option<i64>,
+    day_of_week: Option<i64>,
+) -> Result<Card, String> {
+    if url.contains("linear.app") && url.contains("/issue/") {
+        // Extract the last non-empty path segment as the issue identifier.
+        let identifier = url
+            .split('?')
+            .next()
+            .unwrap_or(&url)
+            .trim_end_matches('/')
+            .rsplit('/')
+            .find(|s| !s.is_empty())
+            .ok_or_else(|| format!("could not extract Linear issue identifier from URL: {url}"))?
+            .to_string();
+        linear::create_single_issue_card(&state, &identifier, week_id, day_of_week).await
+    } else if url.contains("notion.so") || url.contains("notion.com") {
+        notion::create_card_from_url(&state, url, week_id, day_of_week).await
+    } else if url.contains(".slack.com/archives/") {
+        slack::create_card_from_url(&state, url, week_id, day_of_week).await
+    } else {
+        Err("Unsupported URL type".to_string())
+    }
+}

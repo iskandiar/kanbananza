@@ -22,7 +22,7 @@ pub fn build_client(db_state: &DbState) -> Option<OpenAiClient> {
 
 pub async fn evaluate_card(card_id: i64, db_state: &DbState) -> Result<(), String> {
     // Phase A: read settings + card data (no lock held across await)
-    let (card_type, title, metadata_str, time_estimate, api_key) = {
+    let (card_type, source, title, metadata_str, time_estimate, api_key) = {
         let db = db_state.0.lock().map_err(|e| e.to_string())?;
 
         // Check auto_ai toggle
@@ -37,14 +37,15 @@ pub async fn evaluate_card(card_id: i64, db_state: &DbState) -> Result<(), Strin
         // Fetch card fields
         let card = db
             .query_row(
-                "SELECT card_type, title, metadata, time_estimate FROM cards WHERE id=?",
+                "SELECT card_type, source, title, metadata, time_estimate FROM cards WHERE id=?",
                 rusqlite::params![card_id],
                 |r| {
                     Ok((
                         r.get::<_, String>(0)?,
                         r.get::<_, String>(1)?,
-                        r.get::<_, Option<String>>(2)?,
-                        r.get::<_, Option<f64>>(3)?,
+                        r.get::<_, String>(2)?,
+                        r.get::<_, Option<String>>(3)?,
+                        r.get::<_, Option<f64>>(4)?,
                     ))
                 },
             )
@@ -60,7 +61,7 @@ pub async fn evaluate_card(card_id: i64, db_state: &DbState) -> Result<(), Strin
             .optional()
             .map_err(|e| e.to_string())?;
 
-        (card.0, card.1, card.2, card.3, key)
+        (card.0, card.1, card.2, card.3, card.4, key)
     }; // DB lock released
 
     // Skip if no API key
@@ -79,20 +80,107 @@ pub async fn evaluate_card(card_id: i64, db_state: &DbState) -> Result<(), Strin
     }
 
     // Phase B: AI call (no DB lock held)
-    let system = "JSON only. Keys: ai_title (<=6 words), ai_description (1-2 sentences), \
-                  ai_impact (high|medium|low), \
-                  ai_hours (realistic decimal hours — calibrate by lines changed: \
-                  1-5 lines=0.1, 6-30 lines=0.25, 31-100 lines=0.5, \
-                  101-300 lines=1, 301-600 lines=2, 600+ lines=3+; \
-                  omit for meetings).";
-
     let metadata_val: serde_json::Value = metadata_str
         .as_deref()
         .and_then(|m| serde_json::from_str(m).ok())
         .unwrap_or(serde_json::json!({}));
 
-    let user = match card_type.as_str() {
-        "mr" => {
+    // Build system prompt and user message based on card type / source.
+    let (system, user) = match (card_type.as_str(), source.as_str()) {
+        ("task", "linear") => {
+            let priority = metadata_val
+                .get("priority")
+                .and_then(|v| v.as_i64())
+                .unwrap_or(0);
+            let priority_label = match priority {
+                1 => "Urgent",
+                2 => "High",
+                3 => "Medium",
+                4 => "Low",
+                _ => "No priority",
+            };
+            let description = metadata_val
+                .get("description")
+                .and_then(|d| d.as_str())
+                .unwrap_or("");
+            let estimate = metadata_val
+                .get("estimate")
+                .and_then(|v| v.as_f64());
+
+            let ai_impact = match priority {
+                1 | 2 => "high",
+                3 => "mid",
+                _ => "low",
+            };
+
+            let mut msg = format!(
+                "Linear Issue: {title}\nPriority: {priority_label}\nDescription: {description}"
+            );
+            if let Some(pts) = estimate {
+                msg.push_str(&format!("\nStory points: {pts}"));
+            }
+
+            let hours_hint = estimate
+                .map(|pts| format!(" Use {:.1} hours as a starting estimate (story points * 0.5).", pts * 0.5))
+                .unwrap_or_default();
+
+            let sys = format!(
+                "JSON only. Keys: ai_title (<=6 words), ai_description (1-2 sentences), \
+                 ai_impact (high|mid|low — use \"{ai_impact}\" as default based on priority), \
+                 ai_hours (realistic decimal hours).{hours_hint}"
+            );
+            (sys, msg)
+        }
+        ("documentation", "notion") => {
+            let word_count = metadata_val
+                .get("word_count")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0);
+            let content_preview = metadata_val
+                .get("content_preview")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+
+            let sys = "JSON only. Keys: ai_title (<=6 words), ai_description (1-2 sentences), \
+                       ai_hours (realistic time to read and act on this document: \
+                       reading at ~250 words/min + action buffer; express as decimal hours, \
+                       minimum 0.1). Omit ai_impact."
+                .to_string();
+            let msg = format!(
+                "Notion Document: {title}\nWord count: {word_count}\n\
+                 Content preview:\n{content_preview}"
+            );
+            (sys, msg)
+        }
+        ("thread", "slack") => {
+            let channel_name = metadata_val
+                .get("channel_name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown");
+            let reply_count = metadata_val
+                .get("reply_count")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0);
+            let first_message = metadata_val
+                .get("first_message")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let thread_preview = metadata_val
+                .get("thread_preview")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+
+            let sys = "JSON only. Keys: ai_title (<=6 words), ai_description (1-2 sentences), \
+                       ai_hours (time to read the thread and compose a reply; \
+                       express as decimal hours). Omit ai_impact."
+                .to_string();
+            let msg = format!(
+                "Slack thread in #{channel_name}\nReply count: {reply_count}\n\
+                 First message:\n{first_message}\nRecent replies:\n{thread_preview}"
+            );
+            (sys, msg)
+        }
+        ("mr", _) => {
             let desc = metadata_val
                 .get("description")
                 .and_then(|d| d.as_str())
@@ -101,25 +189,51 @@ pub async fn evaluate_card(card_id: i64, db_state: &DbState) -> Result<(), Strin
                 .get("lines_changed")
                 .and_then(|v| v.as_i64())
                 .unwrap_or(0);
-            if desc.is_empty() {
+            let msg = if desc.is_empty() {
                 format!("MR: {title}\nLines changed: {lines}")
             } else {
                 format!("MR: {title}\nLines changed: {lines}\nDescription: {desc}")
-            }
+            };
+            let sys = "JSON only. Keys: ai_title (<=6 words), ai_description (1-2 sentences), \
+                       ai_impact (high|medium|low), \
+                       ai_hours (realistic decimal hours — calibrate by lines changed: \
+                       1-5 lines=0.1, 6-30 lines=0.25, 31-100 lines=0.5, \
+                       101-300 lines=1, 301-600 lines=2, 600+ lines=3+; \
+                       omit for meetings)."
+                .to_string();
+            (sys, msg)
         }
-        "meeting" => {
+        ("meeting", _) => {
             let desc = metadata_val
                 .get("description")
                 .and_then(|d| d.as_str())
                 .unwrap_or("");
             let hours = time_estimate.unwrap_or(0.0);
-            format!("Meeting: {title}\nDescription: {desc}\nDuration: {hours}h")
+            let sys = "JSON only. Keys: ai_title (<=6 words), ai_description (1-2 sentences), \
+                       ai_impact (high|medium|low), \
+                       ai_hours (realistic decimal hours — calibrate by lines changed: \
+                       1-5 lines=0.1, 6-30 lines=0.25, 31-100 lines=0.5, \
+                       101-300 lines=1, 301-600 lines=2, 600+ lines=3+; \
+                       omit for meetings)."
+                .to_string();
+            let msg = format!("Meeting: {title}\nDescription: {desc}\nDuration: {hours}h");
+            (sys, msg)
         }
-        _ => format!("Task: {title}"),
+        _ => {
+            let sys = "JSON only. Keys: ai_title (<=6 words), ai_description (1-2 sentences), \
+                       ai_impact (high|medium|low), \
+                       ai_hours (realistic decimal hours — calibrate by lines changed: \
+                       1-5 lines=0.1, 6-30 lines=0.25, 31-100 lines=0.5, \
+                       101-300 lines=1, 301-600 lines=2, 600+ lines=3+; \
+                       omit for meetings)."
+                .to_string();
+            let msg = format!("Task: {title}");
+            (sys, msg)
+        }
     };
 
     let client = OpenAiClient::new(&api_key);
-    let response = client.complete(system, &user).await?;
+    let response = client.complete(&system, &user).await?;
 
     // Strip markdown code fences if present (```json ... ```)
     let json_str = response

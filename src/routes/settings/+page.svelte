@@ -3,7 +3,8 @@
   import { invoke } from '@tauri-apps/api/core';
   import { listen } from '@tauri-apps/api/event';
   import { settingsStore } from '$lib/stores/settings.svelte';
-  import { getSecret, storeSecret, updateSettings } from '$lib/api/settings';
+  import { getSecret, storeSecret, updateSettings, backupDatabase, saveLinearApiKey, saveNotionApiKey, saveSlackApiKey, syncLinear, disconnectLinear } from '$lib/api/settings';
+  import { save } from '@tauri-apps/plugin-dialog';
   import IntegrationCard from '$lib/components/IntegrationCard.svelte';
   import type { AiProvider } from '$lib/types';
 
@@ -130,12 +131,117 @@
     gitlabSyncMessage = null;
   }
 
-  // --- Integrations list ---
-  const integrations = [
-    { id: 'linear',   name: 'Linear',           description: 'Import assigned issues',   status: 'coming_soon' as const },
-    { id: 'slack',    name: 'Slack',            description: 'Import threads',           status: 'coming_soon' as const },
-    { id: 'notion',   name: 'Notion',           description: 'Import action items',      status: 'coming_soon' as const },
-  ];
+  // --- Linear integration state ---
+  let linearConnected = $state(false);
+  let linearEditingKey = $state(false);
+  let linearKeyInput = $state('');
+  let linearKeySaved = $state(false);
+  let linearSyncing = $state(false);
+  let linearError = $state<string | null>(null);
+  let linearSyncMessage = $state<string | null>(null);
+  let unlistenLinearSynced: (() => void) | null = null;
+
+  async function saveLinearKey() {
+    if (!linearKeyInput.trim()) return;
+    try {
+      await saveLinearApiKey(linearKeyInput.trim());
+      linearConnected = true;
+      linearEditingKey = false;
+      linearKeyInput = '';
+      linearKeySaved = true;
+      setTimeout(() => { linearKeySaved = false; }, 1500);
+    } catch (e) {
+      linearError = `Failed to save key: ${String(e)}`;
+    }
+  }
+
+  async function doSyncLinear() {
+    linearError = null;
+    linearSyncMessage = null;
+    linearSyncing = true;
+    try {
+      await syncLinear();
+    } catch (e) {
+      linearError = String(e);
+      linearSyncing = false;
+    }
+  }
+
+  async function doDisconnectLinear() {
+    await disconnectLinear();
+    linearConnected = false;
+    linearError = null;
+    linearSyncMessage = null;
+  }
+
+  // --- Notion integration state ---
+  let notionConnected = $state(false);
+  let notionKeyInput = $state('');
+  let notionKeySaved = $state(false);
+  let notionError = $state<string | null>(null);
+
+  async function saveNotionKey() {
+    if (!notionKeyInput.trim()) return;
+    try {
+      await saveNotionApiKey(notionKeyInput.trim());
+      notionConnected = true;
+      notionKeyInput = '';
+      notionKeySaved = true;
+      setTimeout(() => { notionKeySaved = false; }, 1500);
+    } catch (e) {
+      notionError = `Failed to save token: ${String(e)}`;
+    }
+  }
+
+  async function disconnectNotion() {
+    await invoke('delete_secret', { service: 'kanbananza', key: 'notion_api_key' });
+    notionConnected = false;
+    notionError = null;
+  }
+
+  // --- Slack integration state ---
+  let slackConnected = $state(false);
+  let slackKeyInput = $state('');
+  let slackKeySaved = $state(false);
+  let slackError = $state<string | null>(null);
+
+  async function saveSlackKey() {
+    if (!slackKeyInput.trim()) return;
+    try {
+      await saveSlackApiKey(slackKeyInput.trim());
+      slackConnected = true;
+      slackKeyInput = '';
+      slackKeySaved = true;
+      setTimeout(() => { slackKeySaved = false; }, 1500);
+    } catch (e) {
+      slackError = `Failed to save token: ${String(e)}`;
+    }
+  }
+
+  async function disconnectSlack() {
+    await invoke('delete_secret', { service: 'kanbananza', key: 'slack_api_key' });
+    slackConnected = false;
+    slackError = null;
+  }
+
+  // --- Backup state ---
+  let backupStatus = $state<'idle' | 'success' | 'error'>('idle');
+  let backupError = $state<string | null>(null);
+
+  async function backupDb() {
+    backupStatus = 'idle';
+    backupError = null;
+    const path = await save({ filters: [{ name: 'SQLite', extensions: ['db'] }], defaultPath: 'kanbananza.db' });
+    if (!path) return;
+    try {
+      await backupDatabase(path);
+      backupStatus = 'success';
+      setTimeout(() => { backupStatus = 'idle'; }, 2000);
+    } catch (e) {
+      backupStatus = 'error';
+      backupError = String(e);
+    }
+  }
 
   // --- Bootstrap ---
   let unlistenConnected: (() => void) | null = null;
@@ -151,6 +257,20 @@
 
     calendarConnected = await invoke<boolean>('get_calendar_status');
     gitlabConnected = (await getSecret('kanbananza', 'gitlab_pat')) !== null;
+    linearConnected = (await getSecret('kanbananza', 'linear_api_key')) !== null;
+    notionConnected = (await getSecret('kanbananza', 'notion_api_key')) !== null;
+    slackConnected = (await getSecret('kanbananza', 'slack_api_key')) !== null;
+
+    unlistenLinearSynced = await listen<{ count: number; error: string | null }>('linear://synced', (event) => {
+      linearSyncing = false;
+      if (event.payload.error) {
+        linearError = event.payload.error;
+        linearSyncMessage = null;
+      } else {
+        linearError = null;
+        linearSyncMessage = `Synced ${event.payload.count} issue${event.payload.count === 1 ? '' : 's'}`;
+      }
+    });
 
     unlistenGitlabSynced = await listen<{ count: number; error: string | null }>('gitlab://synced', (event) => {
       gitlabSyncing = false;
@@ -191,6 +311,7 @@
     unlistenSynced?.();
     unlistenError?.();
     unlistenGitlabSynced?.();
+    unlistenLinearSynced?.();
   });
 </script>
 
@@ -423,14 +544,197 @@
           <p class="text-xs text-red-400/90 py-2 border-b border-[var(--color-border)]">{gitlabError}</p>
         {/if}
 
-        <!-- Other integrations — coming soon -->
-        {#each integrations as integration (integration.id)}
-          <IntegrationCard
-            name={integration.name}
-            description={integration.description}
-            status={integration.status}
-          />
-        {/each}
+        <!-- Linear -->
+        <IntegrationCard
+          name="Linear"
+          description="Import assigned issues"
+          status={linearConnected ? 'connected' : 'not_connected'}
+          onConnect={() => { linearKeyInput = ''; }}
+        />
+        {#if !linearConnected}
+          <div class="flex items-center gap-2 px-0 py-2 border-b border-[var(--color-border)]">
+            <input
+              type="password"
+              bind:value={linearKeyInput}
+              placeholder="lin_api_…"
+              class="flex-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded px-3 py-1.5 text-sm text-[var(--color-text)] placeholder:text-[var(--color-muted)] focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              onkeydown={(e) => { if (e.key === 'Enter') saveLinearKey(); }}
+            />
+            <button
+              onclick={saveLinearKey}
+              disabled={!linearKeyInput.trim()}
+              class="px-3 py-1.5 rounded bg-indigo-600/80 hover:bg-indigo-600 disabled:opacity-40 disabled:cursor-not-allowed text-sm text-white transition-colors"
+            >
+              Save
+            </button>
+            {#if linearKeySaved}
+              <span class="text-xs text-emerald-500">Saved</span>
+            {/if}
+          </div>
+        {/if}
+        {#if linearConnected && !linearEditingKey}
+          <div class="flex items-center gap-4 px-0 py-2 border-b border-[var(--color-border)]">
+            <button
+              onclick={doSyncLinear}
+              disabled={linearSyncing}
+              class="text-xs px-2.5 py-1 rounded border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-text)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              {linearSyncing ? 'Syncing…' : 'Sync now'}
+            </button>
+            {#if linearSyncMessage}
+              <span class="text-xs text-emerald-500/80">{linearSyncMessage}</span>
+            {/if}
+            <div class="flex items-center gap-3 ml-auto">
+              <button
+                onclick={() => { linearEditingKey = true; linearError = null; linearSyncMessage = null; }}
+                class="text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors"
+              >
+                Replace key
+              </button>
+              <button
+                onclick={doDisconnectLinear}
+                class="text-xs text-red-400/70 hover:text-red-400 transition-colors"
+              >
+                Disconnect
+              </button>
+            </div>
+          </div>
+        {/if}
+        {#if linearEditingKey}
+          <div class="flex items-center gap-2 px-0 py-2 border-b border-[var(--color-border)]">
+            <input
+              type="password"
+              bind:value={linearKeyInput}
+              placeholder="lin_api_…"
+              class="flex-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded px-3 py-1.5 text-sm text-[var(--color-text)] placeholder:text-[var(--color-muted)] focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              onkeydown={(e) => { if (e.key === 'Enter') saveLinearKey(); if (e.key === 'Escape') { linearEditingKey = false; linearKeyInput = ''; } }}
+            />
+            <button
+              onclick={saveLinearKey}
+              disabled={!linearKeyInput.trim()}
+              class="px-3 py-1.5 rounded bg-indigo-600/80 hover:bg-indigo-600 disabled:opacity-40 disabled:cursor-not-allowed text-sm text-white transition-colors"
+            >
+              Save
+            </button>
+            <button
+              onclick={() => { linearEditingKey = false; linearKeyInput = ''; }}
+              class="text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        {/if}
+        {#if linearError}
+          <p class="text-xs text-red-400/90 py-2 border-b border-[var(--color-border)]">{linearError}</p>
+        {/if}
+
+        <!-- Notion -->
+        <IntegrationCard
+          name="Notion"
+          description="Import action items"
+          status={notionConnected ? 'connected' : 'not_connected'}
+          onConnect={() => { notionKeyInput = ''; }}
+        />
+        {#if !notionConnected}
+          <div class="flex flex-col gap-2 px-0 py-2 border-b border-[var(--color-border)]">
+            <div class="flex items-center gap-2">
+              <input
+                type="password"
+                bind:value={notionKeyInput}
+                placeholder="secret_…"
+                class="flex-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded px-3 py-1.5 text-sm text-[var(--color-text)] placeholder:text-[var(--color-muted)] focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                onkeydown={(e) => { if (e.key === 'Enter') saveNotionKey(); }}
+              />
+              <button
+                onclick={saveNotionKey}
+                disabled={!notionKeyInput.trim()}
+                class="px-3 py-1.5 rounded bg-indigo-600/80 hover:bg-indigo-600 disabled:opacity-40 disabled:cursor-not-allowed text-sm text-white transition-colors"
+              >
+                Save
+              </button>
+              {#if notionKeySaved}
+                <span class="text-xs text-emerald-500">Saved</span>
+              {/if}
+            </div>
+            <p class="text-xs text-[var(--color-text-muted)]">Share pages with your integration in Notion to allow access</p>
+          </div>
+        {/if}
+        {#if notionConnected}
+          <div class="flex items-center gap-4 px-0 py-2 border-b border-[var(--color-border)]">
+            <p class="text-xs text-[var(--color-text-muted)]">Share pages with your integration in Notion to allow access</p>
+            <button
+              onclick={disconnectNotion}
+              class="text-xs text-red-400/70 hover:text-red-400 transition-colors ml-auto"
+            >
+              Disconnect
+            </button>
+          </div>
+        {/if}
+        {#if notionError}
+          <p class="text-xs text-red-400/90 py-2 border-b border-[var(--color-border)]">{notionError}</p>
+        {/if}
+
+        <!-- Slack -->
+        <IntegrationCard
+          name="Slack"
+          description="Import threads"
+          status={slackConnected ? 'connected' : 'not_connected'}
+          onConnect={() => { slackKeyInput = ''; }}
+        />
+        {#if !slackConnected}
+          <div class="flex items-center gap-2 px-0 py-2 border-b border-[var(--color-border)]">
+            <input
+              type="password"
+              bind:value={slackKeyInput}
+              placeholder="xoxb-…"
+              class="flex-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded px-3 py-1.5 text-sm text-[var(--color-text)] placeholder:text-[var(--color-muted)] focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              onkeydown={(e) => { if (e.key === 'Enter') saveSlackKey(); }}
+            />
+            <button
+              onclick={saveSlackKey}
+              disabled={!slackKeyInput.trim()}
+              class="px-3 py-1.5 rounded bg-indigo-600/80 hover:bg-indigo-600 disabled:opacity-40 disabled:cursor-not-allowed text-sm text-white transition-colors"
+            >
+              Save
+            </button>
+            {#if slackKeySaved}
+              <span class="text-xs text-emerald-500">Saved</span>
+            {/if}
+          </div>
+        {/if}
+        {#if slackConnected}
+          <div class="flex items-center gap-4 px-0 py-2 border-b border-[var(--color-border)]">
+            <button
+              onclick={disconnectSlack}
+              class="text-xs text-red-400/70 hover:text-red-400 transition-colors ml-auto"
+            >
+              Disconnect
+            </button>
+          </div>
+        {/if}
+        {#if slackError}
+          <p class="text-xs text-red-400/90 py-2 border-b border-[var(--color-border)]">{slackError}</p>
+        {/if}
+      </div>
+    </section>
+
+    <!-- Section 4: Data -->
+    <section class="border-t border-[var(--color-border)] mt-6 pt-6">
+      <p class="text-xs uppercase tracking-wide text-[var(--color-muted)] mb-3">Data</p>
+
+      <div class="flex items-center gap-4">
+        <button
+          onclick={backupDb}
+          class="text-sm px-3 py-1.5 rounded border border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-text)] transition-colors"
+        >
+          Backup database
+        </button>
+        {#if backupStatus === 'success'}
+          <span class="text-xs text-emerald-500">Backup saved</span>
+        {/if}
+        {#if backupStatus === 'error'}
+          <span class="text-xs text-red-400">{backupError}</span>
+        {/if}
       </div>
     </section>
 

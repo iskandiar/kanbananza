@@ -7,7 +7,7 @@ pub mod types;
 use commands::{
     ai::summarise_week,
     cards::*,
-    integrations::{disconnect_calendar, disconnect_gitlab, get_calendar_auth_url, get_calendar_status, sync_calendar, sync_gitlab},
+    integrations::{disconnect_calendar, disconnect_gitlab, get_calendar_auth_url, get_calendar_status, sync_calendar, sync_gitlab, sync_linear, disconnect_linear, create_card_from_url},
     keychain::*,
     rollover::*,
     settings::*,
@@ -22,6 +22,7 @@ use tauri::{Emitter, Manager};
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_deep_link::init())
         .setup(|app| {
             // ---------------------------------------------------------------
@@ -126,10 +127,17 @@ pub fn run() {
             // GitLab integration
             sync_gitlab,
             disconnect_gitlab,
+            // Linear integration
+            sync_linear,
+            disconnect_linear,
+            // Universal URL-to-card
+            create_card_from_url,
             // AI
             summarise_week,
             // Shell
             open_url,
+            // Data
+            backup_database,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application")

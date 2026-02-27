@@ -29,3 +29,9 @@ export const updateCard = (
 
 export const deleteCard = (id: number): Promise<void> =>
   invoke('delete_card', { id });
+
+export const createCardFromUrl = (
+  url: string,
+  weekId: number | null,
+  dayOfWeek: number | null
+): Promise<Card> => invoke('create_card_from_url', { url, weekId, dayOfWeek });

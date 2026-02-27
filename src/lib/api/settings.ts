@@ -17,3 +17,23 @@ export const getSecret = (service: string, key: string): Promise<string | null> 
 
 export const deleteSecret = (service: string, key: string): Promise<void> =>
   invoke('delete_secret', { service, key });
+
+export const backupDatabase = (path: string): Promise<void> =>
+  invoke('backup_database', { path });
+
+export const saveLinearApiKey = (value: string): Promise<void> =>
+  invoke('store_secret', { service: 'kanbananza', key: 'linear_api_key', value });
+
+export const saveNotionApiKey = (value: string): Promise<void> =>
+  invoke('store_secret', { service: 'kanbananza', key: 'notion_api_key', value });
+
+export const saveSlackApiKey = (value: string): Promise<void> =>
+  invoke('store_secret', { service: 'kanbananza', key: 'slack_api_key', value });
+
+export async function syncLinear(): Promise<void> {
+  await invoke('sync_linear');
+}
+
+export async function disconnectLinear(): Promise<void> {
+  await invoke('disconnect_linear');
+}

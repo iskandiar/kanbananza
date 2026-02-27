@@ -8,6 +8,7 @@ pub enum CardType {
     Thread,
     Task,
     Review,
+    Documentation,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
