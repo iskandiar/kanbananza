@@ -11,6 +11,7 @@ use commands::{
     keychain::*,
     rollover::*,
     settings::*,
+    shell::open_url,
     weeks::*,
 };
 use db::DbState;
@@ -127,6 +128,8 @@ pub fn run() {
             disconnect_gitlab,
             // AI
             summarise_week,
+            // Shell
+            open_url,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application")

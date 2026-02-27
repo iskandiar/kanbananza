@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Card, Impact } from '$lib/types';
   import { boardStore } from '$lib/stores/board.svelte';
+  import { openUrl } from '$lib/api/shell';
 
   let { card, onMarkDone }: { card: Card; onMarkDone: (id: number) => void } = $props();
 
@@ -19,20 +20,18 @@
   };
 
   const aiFields = $derived.by(() => {
-    if (!card.metadata) return { description: null, impact: null, hours: null };
+    if (!card.metadata) return { description: null, impact: null };
     try {
       const m = JSON.parse(card.metadata) as Record<string, unknown>;
       const rawImpact = m.ai_impact as string | undefined;
       return {
         description: (m.ai_description as string) ?? null,
         impact: rawImpact === 'medium' ? 'mid' : (rawImpact ?? null) as Impact | null,
-        hours: (m.ai_hours as number) ?? null,
       };
-    } catch { return { description: null, impact: null, hours: null }; }
+    } catch { return { description: null, impact: null }; }
   });
 
   const displayImpact = $derived((card.impact ?? aiFields.impact) as Impact | null);
-  const displayHours = $derived(card.time_estimate !== null ? card.time_estimate : aiFields.hours);
 
   const meetingTime = $derived.by(() => {
     if (card.card_type !== 'meeting' || !card.metadata) return null;
@@ -51,8 +50,8 @@
 
   function startEdit() {
     editTitle = card.title;
-    editImpact = card.impact ?? '';
-    editHours = card.time_estimate != null ? String(card.time_estimate) : '1';
+    editImpact = displayImpact ?? '';
+    editHours = card.time_estimate != null ? String(card.time_estimate) : '';
     editUrl = card.url ?? '';
     isEditing = true;
   }
@@ -95,17 +94,17 @@
     {#if displayImpact}
       <span class="text-xs {impactBadge[displayImpact]}">{displayImpact}</span>
     {/if}
-    {#if displayHours}
-      <span class="text-xs text-[var(--color-muted)]">{displayHours}h</span>
+    {#if card.time_estimate}
+      <span class="text-xs text-[var(--color-muted)]">{card.time_estimate}h</span>
     {/if}
     <div class="ml-auto flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
       {#if card.url}
-        <a
-          href={card.url}
-          target="_blank"
+        <button
+          onclick={(e) => { e.stopPropagation(); if (card.url) openUrl(card.url); }}
           class="text-xs text-[var(--color-muted)] hover:text-[var(--color-accent-hover)]"
-          onclick={(e) => e.stopPropagation()}
-        >↗</a>
+          aria-label="Open link"
+          title="Open link"
+        >↗</button>
       {/if}
       {#if !isEditing}
         <button
