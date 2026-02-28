@@ -65,9 +65,9 @@
   };
 
   const impactBadge: Record<string, string> = {
-    low:  'text-[var(--color-impact-low)]  bg-[var(--color-impact-low-bg)]  px-1.5 py-0.5 rounded',
-    mid:  'text-[var(--color-impact-mid)]  bg-[var(--color-impact-mid-bg)]  px-1.5 py-0.5 rounded',
-    high: 'text-[var(--color-impact-high)] bg-[var(--color-impact-high-bg)] px-1.5 py-0.5 rounded',
+    low:  'text-[var(--color-impact-low)]  bg-[var(--color-impact-low-bg)]  px-1 py-px rounded',
+    mid:  'text-[var(--color-impact-mid)]  bg-[var(--color-impact-mid-bg)]  px-1 py-px rounded',
+    high: 'text-[var(--color-impact-high)] bg-[var(--color-impact-high-bg)] px-1 py-px rounded',
   };
 
   const aiFields = $derived.by(() => {
@@ -163,18 +163,20 @@
   class:opacity-40={card.status === 'done'}
   role="article"
 >
-  <button
-    data-no-dnd="true"
-    onclick={handleToggleDone}
-    class="flex-shrink-0 mt-0.5 w-4 h-4 rounded-full border transition-colors flex items-center justify-center {card.status === 'done' ? 'border-[var(--color-done)] bg-[var(--color-done)]/20 text-[var(--color-done)]' : 'border-[var(--color-border)] text-transparent hover:border-[var(--color-done)]/60'}"
-    aria-label={card.status === 'done' ? 'Undo done' : 'Mark done'}
-  >{#if card.status === 'done'}<Check size={10} />{/if}</button>
+  <div class="flex flex-col items-center gap-1 flex-shrink-0 mt-0.5">
+    <button
+      data-no-dnd="true"
+      onclick={handleToggleDone}
+      class="flex-shrink-0 w-4 h-4 rounded-full border transition-colors flex items-center justify-center {card.status === 'done' ? 'border-[var(--color-done)] bg-[var(--color-done)]/20 text-[var(--color-done)]' : 'border-[var(--color-border)] text-transparent hover:border-[var(--color-done)]/60'}"
+      aria-label={card.status === 'done' ? 'Undo done' : 'Mark done'}
+    >{#if card.status === 'done'}<Check size={10} />{/if}</button>
 
-  {#if !isEditing}
-    <div class="flex-shrink-0 mt-0.5 text-[var(--color-muted)] opacity-30 group-hover:opacity-70 cursor-grab">
-      <GripVertical size={14} />
-    </div>
-  {/if}
+    {#if !isEditing}
+      <div class="text-[var(--color-muted)] opacity-30 group-hover:opacity-70 cursor-grab">
+        <GripVertical size={14} />
+      </div>
+    {/if}
+  </div>
 
   <div class="flex-1 min-w-0">
     {#if meetingTime}
@@ -195,17 +197,17 @@
       </div>
     {/if}
     <div class="mt-1.5 flex items-center gap-1.5 flex-wrap">
-      <span class="text-xs px-1.5 py-0.5 rounded border border-[var(--color-border)] flex items-center gap-1 {typeBadge[card.card_type] ?? 'bg-slate-500/15 text-slate-300'}">
-        {#if card.card_type === 'meeting'}<Users size={10} />{/if}
-        {#if card.card_type === 'mr'}<GitPullRequest size={10} />{/if}
-        {#if card.card_type === 'thread'}<MessageSquare size={10} />{/if}
-        {#if card.card_type === 'task'}<ListTodo size={10} />{/if}
-        {#if card.card_type === 'review'}<Eye size={10} />{/if}
-        {#if card.card_type === 'documentation'}<FileText size={10} />{/if}
+      <span class="text-xs px-1 py-px rounded border border-[var(--color-border)] flex items-center gap-1 {typeBadge[card.card_type] ?? 'bg-slate-500/15 text-slate-300'}">
+        {#if card.card_type === 'meeting'}<Users size={9} />{/if}
+        {#if card.card_type === 'mr'}<GitPullRequest size={9} />{/if}
+        {#if card.card_type === 'thread'}<MessageSquare size={9} />{/if}
+        {#if card.card_type === 'task'}<ListTodo size={9} />{/if}
+        {#if card.card_type === 'review'}<Eye size={9} />{/if}
+        {#if card.card_type === 'documentation'}<FileText size={9} />{/if}
         {typeLabel[card.card_type]}
       </span>
       {#if card.source !== 'manual'}
-        <span class="flex items-center gap-1 px-1.5 py-0.5 rounded border border-[var(--color-border)] text-[var(--color-muted)] text-xs" title="Synced from {card.source}">
+        <span class="flex items-center gap-1 px-1 py-px rounded border border-[var(--color-border)] text-[var(--color-muted)] text-xs" title="Synced from {card.source}">
           {#if card.source === 'calendar'}<IconCalendar />{/if}
           {#if card.source === 'gitlab'}<IconGitLab />{/if}
           {#if card.source === 'linear'}<IconLinear />{/if}
@@ -280,19 +282,19 @@
           class="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded px-2 py-1 text-xs text-[var(--color-text)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
           onkeydown={(e) => { if (e.key === 'Escape') cancelEdit(); }}
         />
-        <p class="text-xs text-[var(--color-muted)]">Type</p>
-        <div class="flex gap-1.5">
-          {#each ['task', 'meeting', 'mr', 'thread', 'review', 'documentation'] as type (type)}
-            <button
-              type="button"
-              onclick={() => {
-                editCardType = type as CardType;
-                saveField({ cardType: type as CardType });
-              }}
-              class="flex-1 text-xs py-0.5 rounded border transition-colors {editCardType === type ? 'border-[var(--color-accent)]/60 text-[var(--color-accent)] bg-[var(--color-accent)]/10' : 'border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]'}"
-            >{typeLabel[type as CardType]}</button>
-          {/each}
-        </div>
+        <label class="flex items-center gap-2">
+          <span class="text-xs text-[var(--color-muted)]">Type</span>
+          <select
+            bind:value={editCardType}
+            data-no-dnd="true"
+            onchange={() => saveField({ cardType: editCardType })}
+            class="flex-1 text-xs bg-[var(--color-surface)] border border-[var(--color-border)] rounded px-1.5 py-0.5 text-[var(--color-text)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+          >
+            {#each ['task', 'meeting', 'mr', 'thread', 'review', 'documentation'] as type (type)}
+              <option value={type}>{typeLabel[type as CardType]}</option>
+            {/each}
+          </select>
+        </label>
         <p class="text-xs text-[var(--color-muted)]">Priority</p>
         <div class="flex gap-1.5">
           {#each ['low', 'mid', 'high'] as level (level)}
