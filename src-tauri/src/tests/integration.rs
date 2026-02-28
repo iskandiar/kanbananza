@@ -85,6 +85,7 @@ mod tests {
             Some(1), // new position
             None,
             None,
+            None,
         )
         .unwrap();
 

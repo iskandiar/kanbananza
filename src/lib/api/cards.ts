@@ -24,6 +24,7 @@ export const updateCard = (
     position?: number;
     notes?: string;
     clearWeek?: boolean; // set week_id=NULL and day_of_week=NULL (move to backlog)
+    cardType?: CardType;
   }
 ): Promise<Card> => invoke('update_card', { id, ...fields });
 

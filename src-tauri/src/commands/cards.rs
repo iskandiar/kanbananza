@@ -78,6 +78,7 @@ pub(crate) fn db_update_card(
     position: Option<i64>,
     notes: Option<String>,
     clear_week: Option<bool>,
+    card_type: Option<String>,
 ) -> Result<Card, String> {
     let mut parts: Vec<String> = Vec::new();
     let mut vals: Vec<Value> = Vec::new();
@@ -89,6 +90,7 @@ pub(crate) fn db_update_card(
     if let Some(v) = url           { parts.push("url=?".into());            vals.push(Value::Text(v)); }
     if let Some(v) = position      { parts.push("position=?".into());       vals.push(Value::Integer(v)); }
     if let Some(v) = notes         { parts.push("notes=?".into());          vals.push(Value::Text(v)); }
+    if let Some(v) = card_type     { parts.push("card_type=?".into());      vals.push(Value::Text(v)); }
 
     if clear_week == Some(true) {
         // Embed NULLs directly — no placeholder needed
@@ -163,12 +165,13 @@ pub fn update_card(
     // When true, sets week_id=NULL and day_of_week=NULL (move to backlog).
     // Needed because JSON null and absent field both deserialize to Option::None.
     clear_week: Option<bool>,
+    card_type: Option<String>,
     state: State<DbState>,
 ) -> Result<Card, String> {
     let db = state.0.lock().map_err(|e| e.to_string())?;
     db_update_card(
         &db, id, title, status, impact, time_estimate, url, week_id, day_of_week, position,
-        notes, clear_week,
+        notes, clear_week, card_type,
     )
 }
 
@@ -240,6 +243,7 @@ mod tests {
             None,
             None,
             None,
+            None,
         )
         .unwrap();
 
@@ -273,6 +277,7 @@ mod tests {
         let moved = db_update_card(
             &db, card.id, None, None, None, None, None, None, None, None, None,
             Some(true), // clear_week
+            None,
         )
         .unwrap();
 
@@ -319,5 +324,41 @@ mod tests {
         assert_eq!(c1.position, 1, "first card position must be 1");
         assert_eq!(c2.position, 2, "second card position must be 2");
         assert_eq!(c3.position, 3, "third card position must be 3");
+    }
+
+    // Updating a card's type must persist the new card type.
+    #[test]
+    fn update_card_type_persists() {
+        let db = open_test_db();
+        let card = db_create_card(&db, "My task", &CardType::Task, None, None).unwrap();
+        assert_eq!(card.card_type, CardType::Task);
+
+        let meeting_str = serde_json::to_value(&CardType::Meeting)
+            .unwrap()
+            .as_str()
+            .unwrap()
+            .to_string();
+        let updated = db_update_card(
+            &db,
+            card.id,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some(meeting_str),
+        )
+        .unwrap();
+
+        assert_eq!(updated.card_type, CardType::Meeting);
+        // Re-read to confirm persistence through a second query.
+        let re_read = db_list_cards_by_week(&db, None).unwrap();
+        assert_eq!(re_read.len(), 1);
+        assert_eq!(re_read[0].card_type, CardType::Meeting);
     }
 }

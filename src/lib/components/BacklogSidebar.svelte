@@ -1,5 +1,14 @@
-<script lang="ts">
+<script module lang="ts">
   import type { Card } from '$lib/types';
+
+  export function filterCards(cards: Card[], query: string): Card[] {
+    const q = query.trim().toLowerCase();
+    if (!q) return cards;
+    return cards.filter(c => c.title.toLowerCase().includes(q));
+  }
+</script>
+
+<script lang="ts">
   import { dndzone } from 'svelte-dnd-action';
   import CardComponent from './Card.svelte';
   import QuickAdd from './QuickAdd.svelte';
@@ -26,11 +35,16 @@
   let localCards = $state(cards);
   $effect(() => { localCards = cards; });
 
+  let searchQuery = $state('');
+  const filteredCards = $derived(filterCards(localCards, searchQuery));
+
   function handleDndConsider(e: CustomEvent<{ items: Card[] }>) {
+    if (searchQuery.trim()) return; // No-op during filtered view
     localCards = e.detail.items;
   }
 
   function handleDndFinalize(e: CustomEvent<{ items: Card[] }>) {
+    if (searchQuery.trim()) return; // No-op during filtered view
     localCards = e.detail.items;
     localCards.forEach((card, i) => {
       if (card.week_id !== null || card.position !== i) {
@@ -57,22 +71,29 @@
 
   {#if isOpen}
     <div class="px-3 py-2 border-b border-[var(--color-border)]">
-      <QuickAdd onAdd={onAddCard} weekId={null} dayOfWeek={null} {onCardCreated} />
+      <input type="text" bind:value={searchQuery} placeholder="Search backlog…"
+        class="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded px-2 py-1.5 text-xs text-[var(--color-text)] placeholder-[var(--color-muted)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]" />
     </div>
   {/if}
 
   <div
     class="flex flex-col gap-2 p-3 overflow-y-auto flex-1 min-h-[2rem]"
     use:dndzone={{
-      items: localCards,
+      items: filteredCards,
       flipDurationMs: 150,
       dropTargetStyle: { outline: 'none', background: 'rgba(61,126,255,0.07)', 'border-radius': '6px' }
     }}
     onconsider={handleDndConsider}
     onfinalize={handleDndFinalize}
   >
-    {#each localCards as card (card.id)}
+    {#each filteredCards as card (card.id)}
       <CardComponent {card} {onMarkDone} />
     {/each}
   </div>
+
+  {#if isOpen}
+    <div class="px-3 py-2 border-t border-[var(--color-border)]">
+      <QuickAdd onAdd={onAddCard} weekId={null} dayOfWeek={null} {onCardCreated} />
+    </div>
+  {/if}
 </aside>

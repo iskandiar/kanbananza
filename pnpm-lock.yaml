@@ -14,6 +14,9 @@ importers:
       '@tauri-apps/plugin-dialog':
         specifier: ^2.6.0
         version: 2.6.0
+      lucide-svelte:
+        specifier: ^0.469.0
+        version: 0.469.0(svelte@5.53.5)
       svelte-dnd-action:
         specifier: ^0.9.69
         version: 0.9.69(svelte@5.53.5)
@@ -991,6 +994,11 @@ packages:
   lru-cache@11.2.6:
     resolution: {integrity: sha512-ESL2CrkS/2wTPfuend7Zhkzo2u0daGJ/A2VucJOgQ/C48S/zB8MMeMHSGKYpXhIjbPxfuezITkaBH1wqv00DDQ==}
     engines: {node: 20 || >=22}
+
+  lucide-svelte@0.469.0:
+    resolution: {integrity: sha512-PMIJ8jrFqVUsXJz4d1yfAQplaGhNOahwwkzbunha8DhpiD73xqX24n8dE1dPpUk3vcrdWVsHc1y/liHHotOnGQ==}
+    peerDependencies:
+      svelte: ^3 || ^4 || ^5.0.0-next.42
 
   magic-string@0.30.21:
     resolution: {integrity: sha512-vd2F4YUyEXKGcLHoq+TEyCjxueSeHnFxyyjNp80yg0XV4vUhnDer/lvvlqM/arB5bXQN5K2/3oinyCRyx8T2CQ==}
@@ -2006,6 +2014,10 @@ snapshots:
   locate-character@3.0.0: {}
 
   lru-cache@11.2.6: {}
+
+  lucide-svelte@0.469.0(svelte@5.53.5):
+    dependencies:
+      svelte: 5.53.5
 
   magic-string@0.30.21:
     dependencies:

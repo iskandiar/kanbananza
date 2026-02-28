@@ -29,14 +29,16 @@ function getDisplayImpact(cardImpact: Impact | null, aiImpact: Impact | null): I
   return cardImpact ?? aiImpact;
 }
 
-function getMeetingTime(cardType: string, metadata: string | null): string | null {
-  if (cardType !== 'meeting' || !metadata) return null;
+function getMeetingTimeRange(metadata: string | null): string | null {
+  if (!metadata) return null;
   try {
-    const m = JSON.parse(metadata) as { start_time: string; end_time: string };
-    return new Date(m.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  } catch {
-    return null;
-  }
+    const m = JSON.parse(metadata) as Record<string, unknown>;
+    const opts = { hour: '2-digit', minute: '2-digit' } as const;
+    const start = new Date(m.start_time as string ?? '').toLocaleTimeString([], opts);
+    if (!m.end_time) return start;
+    const end = new Date(m.end_time as string).toLocaleTimeString([], opts);
+    return `${start} – ${end}`;
+  } catch { return null; }
 }
 
 describe('Card Metadata Parsing', () => {
@@ -185,16 +187,36 @@ describe('Card Metadata Parsing', () => {
     });
   });
 
-  describe('getMeetingTime - parsing meeting metadata', () => {
-    it('parses ISO datetime to HH:MM format', () => {
+  describe('getMeetingTimeRange - parsing meeting metadata', () => {
+    it('returns null for null metadata', () => {
+      const result = getMeetingTimeRange(null);
+      expect(result).toBeNull();
+    });
+
+    it('returns start time only when end_time is absent', () => {
+      const metadata = JSON.stringify({
+        start_time: '2026-02-28T14:30:00Z'
+      });
+      const result = getMeetingTimeRange(metadata);
+      expect(result).not.toBeNull();
+      expect(result).toMatch(/\d{1,2}:\d{2}/);
+      expect(result).not.toContain(' – ');
+    });
+
+    it('returns "HH:MM – HH:MM" format when both times present', () => {
       const metadata = JSON.stringify({
         start_time: '2026-02-28T14:30:00Z',
         end_time: '2026-02-28T15:30:00Z'
       });
-      const result = getMeetingTime('meeting', metadata);
-      // Result depends on system locale, so check it's not null and contains digits
+      const result = getMeetingTimeRange(metadata);
+      // Check for separator in the result (locale-safe)
       expect(result).not.toBeNull();
-      expect(result).toMatch(/\d{1,2}:\d{2}/);
+      expect(result).toContain(' – ');
+      // Should have two time patterns separated by dash
+      const parts = result!.split(' – ');
+      expect(parts).toHaveLength(2);
+      expect(parts[0]).toMatch(/\d{1,2}:\d{2}/);
+      expect(parts[1]).toMatch(/\d{1,2}:\d{2}/);
     });
 
     it('handles different time zones in ISO string', () => {
@@ -202,47 +224,14 @@ describe('Card Metadata Parsing', () => {
         start_time: '2026-02-28T09:00:00+01:00',
         end_time: '2026-02-28T10:00:00+01:00'
       });
-      const result = getMeetingTime('meeting', metadata);
+      const result = getMeetingTimeRange(metadata);
       expect(result).not.toBeNull();
-      expect(result).toMatch(/\d{1,2}:\d{2}/);
-    });
-
-    it('returns null for non-meeting card type', () => {
-      const metadata = JSON.stringify({
-        start_time: '2026-02-28T14:30:00Z',
-        end_time: '2026-02-28T15:30:00Z'
-      });
-      const result = getMeetingTime('task', metadata);
-      expect(result).toBeNull();
-    });
-
-    it('returns null when metadata is null', () => {
-      const result = getMeetingTime('meeting', null);
-      expect(result).toBeNull();
+      expect(result).toContain(' – ');
     });
 
     it('returns null for malformed metadata JSON', () => {
-      const result = getMeetingTime('meeting', '{invalid}');
+      const result = getMeetingTimeRange('{invalid}');
       expect(result).toBeNull();
-    });
-
-    it('returns "Invalid Date" for invalid ISO datetime', () => {
-      const metadata = JSON.stringify({
-        start_time: 'not-a-date',
-        end_time: '2026-02-28T15:30:00Z'
-      });
-      const result = getMeetingTime('meeting', metadata);
-      // JavaScript's Date constructor produces "Invalid Date" string when parsed with invalid input
-      expect(result).toBe('Invalid Date');
-    });
-
-    it('returns "Invalid Date" when start_time is missing', () => {
-      const metadata = JSON.stringify({
-        end_time: '2026-02-28T15:30:00Z'
-      });
-      const result = getMeetingTime('meeting', metadata);
-      // Missing start_time means accessing undefined, which becomes "Invalid Date" when parsed
-      expect(result).toBe('Invalid Date');
     });
 
     it('handles midnight time', () => {
@@ -250,9 +239,9 @@ describe('Card Metadata Parsing', () => {
         start_time: '2026-02-28T00:00:00Z',
         end_time: '2026-02-28T01:00:00Z'
       });
-      const result = getMeetingTime('meeting', metadata);
+      const result = getMeetingTimeRange(metadata);
       expect(result).not.toBeNull();
-      expect(result).toMatch(/\d{1,2}:\d{2}/);
+      expect(result).toContain(' – ');
     });
 
     it('handles end-of-day time', () => {
@@ -260,9 +249,21 @@ describe('Card Metadata Parsing', () => {
         start_time: '2026-02-28T23:30:00Z',
         end_time: '2026-03-01T00:30:00Z'
       });
-      const result = getMeetingTime('meeting', metadata);
+      const result = getMeetingTimeRange(metadata);
       expect(result).not.toBeNull();
-      expect(result).toMatch(/\d{1,2}:\d{2}/);
+      expect(result).toContain(' – ');
+    });
+
+    it('returns "Invalid Date" for invalid ISO datetime', () => {
+      const metadata = JSON.stringify({
+        start_time: 'not-a-date',
+        end_time: '2026-02-28T15:30:00Z'
+      });
+      const result = getMeetingTimeRange(metadata);
+      // JavaScript's Date constructor produces "Invalid Date" string when parsed with invalid input
+      // When start is invalid but end is valid, result contains the separator
+      expect(result).toContain('Invalid Date');
+      expect(result).toContain(' – ');
     });
   });
 
@@ -294,9 +295,10 @@ describe('Card Metadata Parsing', () => {
         ai_description: 'Team standup',
         ai_impact: 'medium'
       });
-      const time = getMeetingTime('meeting', metadata);
+      const time = getMeetingTimeRange(metadata);
       const aiFields = parseAiFields(metadata);
       expect(time).not.toBeNull();
+      expect(time).toContain(' – ');
       expect(aiFields.description).toBe('Team standup');
       expect(aiFields.impact).toBe('mid');
     });
@@ -305,7 +307,7 @@ describe('Card Metadata Parsing', () => {
       const metadata = 'corrupted{data}';
       const aiFields = parseAiFields(metadata);
       const displayImpact = getDisplayImpact(null, aiFields.impact);
-      const time = getMeetingTime('meeting', metadata);
+      const time = getMeetingTimeRange(metadata);
       expect(aiFields).toEqual({ description: null, impact: null });
       expect(displayImpact).toBeNull();
       expect(time).toBeNull();
