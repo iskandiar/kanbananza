@@ -3,6 +3,7 @@
   import type { Week } from '$lib/types';
   import { invoke } from '@tauri-apps/api/core';
   import { summariseWeek } from '$lib/api/ai';
+  import { listCardsByWeek } from '$lib/api/cards';
   import { formatDateRange } from '$lib/utils';
 
   type WeekRow = Week & { cardCount: number; summarising: boolean };
@@ -16,7 +17,7 @@
       const raw: Week[] = await invoke('list_weeks');
       const rows = await Promise.all(
         raw.map(async (w) => {
-          const cards: { id: number }[] = await invoke('list_cards_by_week', { weekId: w.id });
+          const cards = await listCardsByWeek(w.id);
           return { ...w, cardCount: cards.length, summarising: false };
         })
       );

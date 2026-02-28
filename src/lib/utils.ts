@@ -23,3 +23,8 @@ export function formatDateRange(startDate: string): string {
   const opts: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
   return `${monday.toLocaleDateString('en-US', opts)} – ${friday.toLocaleDateString('en-US', { ...opts, year: 'numeric' })}`;
 }
+
+// Sum time estimates across a list of cards
+export function sumHours(cards: any[]): number {
+  return cards.reduce((sum, c) => sum + (c.time_estimate ?? 0), 0);
+}

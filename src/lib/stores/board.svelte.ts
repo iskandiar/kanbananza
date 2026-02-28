@@ -48,6 +48,48 @@ class BoardStore {
     return result;
   });
 
+  // Is the current week the week containing today?
+  get isCurrentWeek(): boolean {
+    const w = this.currentWeek;
+    if (!w) return true;
+    const today = new Date();
+    const { startDate: todayWeekStart } = isoWeek(today);
+    return w.start_date === todayWeekStart;
+  }
+
+  // Day columns for the current week with label, date, cards, etc.
+  get days(): Array<{
+    label: string;
+    date: string;
+    dayOfWeek: number;
+    weekId: number | null;
+    isToday: boolean;
+    meetings: Card[];
+    tasks: Card[];
+  }> {
+    const w = this.currentWeek;
+    if (!w) return [];
+    const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+    const monday = new Date(w.start_date);
+    const today = new Date();
+    const todayDOW = this.isCurrentWeek ? ((today.getDay() + 6) % 7) + 1 : null;
+
+    return DAY_LABELS.map((label, i) => {
+      const d = new Date(monday);
+      d.setDate(monday.getDate() + i);
+      const date = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+      return {
+        label,
+        date,
+        dayOfWeek: i + 1,
+        weekId: w.id,
+        isToday: todayDOW === i + 1,
+        meetings: this.meetingsByDay.get(i + 1) ?? [],
+        tasks: this.tasksByDay.get(i + 1) ?? []
+      };
+    });
+  }
+
   async loadCurrentWeek() {
     this.isLoading = true;
     this.error = null;

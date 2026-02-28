@@ -1,38 +1,8 @@
 use rusqlite::{Connection, OptionalExtension};
 
-use crate::db::DbState;
+use crate::db::{DbState, row_to_card};
 use crate::integrations::linear::client::{get_issue_by_identifier, get_viewer_issues, LinearIssue};
-use crate::types::{Card, CardStatus, CardType, Source};
-
-// ---------------------------------------------------------------------------
-// Card deserialization helper (mirrors commands/cards.rs)
-// ---------------------------------------------------------------------------
-
-fn row_to_card(row: &rusqlite::Row) -> rusqlite::Result<Card> {
-    Ok(Card {
-        id: row.get(0)?,
-        title: row.get(1)?,
-        card_type: serde_json::from_str(&format!("\"{}\"", row.get::<_, String>(2)?))
-            .unwrap_or(CardType::Task),
-        status: serde_json::from_str(&format!("\"{}\"", row.get::<_, String>(3)?))
-            .unwrap_or(CardStatus::Planned),
-        impact: row.get::<_, Option<String>>(4)?.and_then(|s| {
-            serde_json::from_str(&format!("\"{s}\"")).ok()
-        }),
-        time_estimate: row.get(5)?,
-        url: row.get(6)?,
-        week_id: row.get(7)?,
-        day_of_week: row.get(8)?,
-        position: row.get(9)?,
-        source: serde_json::from_str(&format!("\"{}\"", row.get::<_, String>(10)?))
-            .unwrap_or(Source::Manual),
-        external_id: row.get(11)?,
-        notes: row.get(12)?,
-        metadata: row.get(13)?,
-        created_at: row.get(14)?,
-        updated_at: row.get(15)?,
-    })
-}
+use crate::types::Card;
 
 const SELECT: &str =
     "SELECT id,title,card_type,status,impact,time_estimate,url,week_id,day_of_week,\
@@ -141,7 +111,7 @@ pub async fn create_single_issue_card(
             .ok_or_else(|| format!("failed to upsert Linear issue '{identifier}'"))?;
         let card = db
             .query_row(&format!("{SELECT} WHERE id=?"), [id], row_to_card)
-            .map_err(|e| e.to_string())?;
+            .map_err(|e: rusqlite::Error| e.to_string())?;
         (id, card)
     }; // DB lock released
 

@@ -65,6 +65,7 @@
   let editHours = $state('');
   let editUrl = $state('');
   let confirmingDelete = $state(false);
+  let saveError = $state<string | null>(null);
 
   function startEdit() {
     editTitle = card.title;
@@ -80,13 +81,18 @@
   }
 
   async function saveEdit() {
-    await boardStore.updateCard(card.id, {
-      title: editTitle,
-      ...(editImpact ? { impact: editImpact as Impact } : {}),
-      ...(editHours !== '' ? { timeEstimate: Number(editHours) } : {}),
-      ...(editUrl ? { url: editUrl } : {})
-    });
-    isEditing = false;
+    try {
+      await boardStore.updateCard(card.id, {
+        title: editTitle,
+        ...(editImpact ? { impact: editImpact as Impact } : {}),
+        ...(editHours !== '' ? { timeEstimate: Number(editHours) } : {}),
+        ...(editUrl ? { url: editUrl } : {})
+      });
+      saveError = null;
+      isEditing = false;
+    } catch (e) {
+      saveError = e instanceof Error ? e.message : String(e);
+    }
   }
 
   function focus(node: HTMLElement) {
@@ -176,7 +182,7 @@
         />
         <p class="text-xs text-[var(--color-muted)]">Priority</p>
         <div class="flex gap-1.5">
-          {#each ['low', 'mid', 'high'] as level}
+          {#each ['low', 'mid', 'high'] as level (level)}
             <button
               type="button"
               onclick={() => { editImpact = editImpact === level ? '' : level; }}
@@ -211,6 +217,9 @@
             class="flex-1 text-xs py-1 rounded border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] transition-colors"
           >Cancel</button>
         </div>
+        {#if saveError}
+          <p class="text-xs text-rose-400">{saveError}</p>
+        {/if}
         {#if !confirmingDelete}
           <button
             type="button"

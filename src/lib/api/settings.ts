@@ -37,3 +37,6 @@ export async function syncLinear(): Promise<void> {
 export async function disconnectLinear(): Promise<void> {
   await invoke('disconnect_linear');
 }
+
+export const getCalendarAuthUrl = (): Promise<string> =>
+  invoke('get_calendar_auth_url');

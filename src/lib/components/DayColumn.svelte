@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Card } from '$lib/types';
+  import { sumHours } from '$lib/utils';
   import { dndzone } from 'svelte-dnd-action';
   import CardComponent from './Card.svelte';
   import LoadIndicator from './LoadIndicator.svelte';
@@ -35,23 +36,21 @@
 
   // Include both tasks and meetings in load calculation
   const doneHoursByType = $derived(
-    [...tasks.filter(t => t.status === 'done'), ...meetings.filter(m => m.status === 'done')].reduce((sum, c) => sum + (c.time_estimate ?? 0), 0)
+    sumHours([...tasks.filter(t => t.status === 'done'), ...meetings.filter(m => m.status === 'done')])
   );
   const plannedHoursByType = $derived(
-    [...tasks.filter(t => t.status !== 'done'), ...meetings.filter(m => m.status !== 'done')].reduce((sum, c) => sum + (c.time_estimate ?? 0), 0)
+    sumHours([...tasks.filter(t => t.status !== 'done'), ...meetings.filter(m => m.status !== 'done')])
   );
 
-  // Pending tasks for DnD zone
-  let localPendingTasks = $state<Card[]>([]);
+  // Pending tasks for DnD zone — initialized from prop; kept mutable for svelte-dnd-action
+  // The $effect syncs updates, preventing stale cached state when parent re-renders.
+  let localPendingTasks = $state(tasks.filter(t => t.status !== 'done'));
   $effect(() => { localPendingTasks = tasks.filter(t => t.status !== 'done'); });
 
   // Done and pending tasks/meetings for collapsed section
   const doneTasks = $derived(tasks.filter(t => t.status === 'done'));
   const doneMeetings = $derived(meetings.filter(m => m.status === 'done'));
   const pendingMeetings = $derived(meetings.filter(m => m.status !== 'done'));
-  const doneHours = $derived(
-    [...doneTasks, ...doneMeetings].reduce((sum, c) => sum + (c.time_estimate ?? 0), 0)
-  );
   let showDone = $state(false);
 
   function handleDndConsider(e: CustomEvent<{ items: Card[] }>) {
@@ -113,7 +112,7 @@
         onclick={() => (showDone = !showDone)}
         class="text-xs text-[var(--color-muted)] hover:text-[var(--color-text)] transition-colors"
       >
-        {showDone ? '▾' : '▸'} {doneTasks.length + doneMeetings.length} done · {doneHours.toFixed(1)}h consumed
+        {showDone ? '▾' : '▸'} {doneTasks.length + doneMeetings.length} done · {doneHoursByType.toFixed(1)}h consumed
       </button>
       {#if showDone}
         <div class="flex flex-col gap-1.5 mt-1.5">

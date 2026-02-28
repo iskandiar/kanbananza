@@ -22,7 +22,8 @@
     onCardCreated?: (card: Card) => void;
   } = $props();
 
-  let localCards = $state<Card[]>([]);
+  // Local mutable copy for svelte-dnd-action; initialized from prop and synced via $effect
+  let localCards = $state(cards);
   $effect(() => { localCards = cards; });
 
   function handleDndConsider(e: CustomEvent<{ items: Card[] }>) {

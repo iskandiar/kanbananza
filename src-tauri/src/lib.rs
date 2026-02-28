@@ -1,10 +1,13 @@
 pub mod ai;
 pub mod commands;
 pub mod db;
+pub mod error;
 pub mod integrations;
 pub mod types;
 #[cfg(test)]
 pub mod tests;
+
+pub use error::AppError;
 
 use commands::{
     ai::summarise_week,
@@ -30,19 +33,17 @@ pub fn run() {
             // ---------------------------------------------------------------
             // Database setup
             // ---------------------------------------------------------------
-            let data_dir = app.path().app_data_dir().expect("no app data dir");
+            let data_dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&data_dir)?;
             let db_path = data_dir.join("kanbananza.db");
-            let conn = Connection::open(&db_path).expect("failed to open db");
+            let conn = Connection::open(&db_path)?;
             // WAL mode: writes survive crashes; readers never block writers
-            conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;")
-                .expect("failed to set WAL mode");
-            conn.execute_batch(include_str!("../migrations/0001_initial.sql"))
-                .expect("failed to run migrations");
+            conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;")?;
+            conn.execute_batch(include_str!("../migrations/0001_initial.sql"))?;
             // 0002 adds a column via ALTER TABLE — ignore if already applied.
             if let Err(e) = conn.execute_batch(include_str!("../migrations/0002_auto_ai.sql")) {
                 if !e.to_string().contains("duplicate column name") {
-                    panic!("failed to run auto_ai migration: {e}");
+                    return Err(format!("failed to run auto_ai migration: {e}").into());
                 }
             }
             app.manage(DbState(Mutex::new(conn)));
@@ -142,5 +143,8 @@ pub fn run() {
             backup_database,
         ])
         .run(tauri::generate_context!())
-        .expect("error while running tauri application")
+        .unwrap_or_else(|e| {
+            eprintln!("fatal: {e}");
+            std::process::exit(1);
+        })
 }

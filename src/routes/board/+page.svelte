@@ -5,54 +5,14 @@
   import { settingsStore } from '$lib/stores/settings.svelte';
   import type { Card } from '$lib/types';
 
-  const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
-
   onMount(async () => {
     await Promise.all([boardStore.loadCurrentWeek(), settingsStore.load()]);
-  });
-
-  const isCurrentWeek = $derived(() => {
-    const w = boardStore.currentWeek;
-    if (!w) return true;
-    const today = new Date();
-    const todayMonday = new Date(today);
-    todayMonday.setDate(today.getDate() - ((today.getDay() + 6) % 7));
-    const todayWeekStart = [
-      todayMonday.getFullYear(),
-      String(todayMonday.getMonth() + 1).padStart(2, '0'),
-      String(todayMonday.getDate()).padStart(2, '0')
-    ].join('-');
-    return w.start_date === todayWeekStart;
   });
 
   const weekLabel = $derived(() => {
     const w = boardStore.currentWeek;
     if (!w) return '…';
     return `W${w.week_number} · ${w.start_date}`;
-  });
-
-  const days = $derived(() => {
-    const w = boardStore.currentWeek;
-    if (!w) return [];
-    const monday = new Date(w.start_date);
-    const today = new Date();
-    // today.getDay(): 0=Sun,1=Mon,...,6=Sat → DOW 1-5: ((day+6)%7)+1
-    const todayDOW = isCurrentWeek() ? ((today.getDay() + 6) % 7) + 1 : null;
-
-    return DAY_LABELS.map((label, i) => {
-      const d = new Date(monday);
-      d.setDate(monday.getDate() + i);
-      const date = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-      return {
-        label,
-        date,
-        dayOfWeek: i + 1,
-        weekId: w.id,
-        isToday: todayDOW === i + 1,
-        meetings: boardStore.meetingsByDay.get(i + 1) ?? [],
-        tasks: boardStore.tasksByDay.get(i + 1) ?? []
-      };
-    });
   });
 
   async function handleAddCard(dayOfWeek: number | null, title: string) {
@@ -86,10 +46,10 @@
 {:else}
   <WeekBoard
     weekLabel={weekLabel()}
-    days={days()}
+    days={boardStore.days}
     backlogCards={boardStore.backlog}
     availableHours={settingsStore.availableHours}
-    isCurrentWeek={isCurrentWeek()}
+    isCurrentWeek={boardStore.isCurrentWeek}
     onPrevWeek={() => boardStore.navigateWeek(-1)}
     onNextWeek={() => boardStore.navigateWeek(1)}
     onJumpToToday={() => boardStore.loadCurrentWeek()}
