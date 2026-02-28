@@ -32,3 +32,62 @@ You are a SvelteKit and TypeScript specialist working on Kanbananza — a person
 - Use Svelte stores for all shared state; keep component state local where possible
 - Types for cards, columns, and board state live in `src/lib/types.ts`
 - Tauri `invoke()` calls are wrapped in `src/lib/api/` — never call `invoke()` directly in components
+
+## Core Principles
+- MUST keep components small and single-responsibility.
+- MUST move business logic out of components when non-trivial.
+- SHOULD prefer reactive statements (`$:`) over manual DOM logic.
+- SHOULD avoid unnecessary stores for local state.
+
+## State Management
+- MUST use local state unless sharing is required.
+- MUST keep global stores minimal and well-scoped.
+- MUST derive state instead of duplicating it.
+- MUST NOT mutate store values outside `update` / `set`.
+
+## Reactivity
+- MUST rely on Svelte reactivity instead of manual subscriptions when possible.
+- MUST clean up manual subscriptions in `onDestroy`.
+- SHOULD prefer derived stores for computed state.
+- MUST avoid hidden reactive side effects.
+
+## Component Design
+- MUST define explicit `export let` props.
+- MUST validate required props (TypeScript preferred).
+- SHOULD avoid deeply nested component trees.
+- SHOULD use slots for composition, not prop drilling.
+
+## Async & Data Fetching
+- MUST handle loading and error states explicitly.
+- MUST cancel or ignore stale async results.
+- SHOULD isolate API calls in service modules.
+- MUST NOT fetch directly in deeply nested components.
+
+## Performance
+- MUST use keyed `{#each}` when rendering dynamic lists.
+- SHOULD avoid unnecessary reactive computations.
+- MUST lazy-load large routes or components when applicable.
+- SHOULD debounce expensive operations.
+
+## Routing
+- MUST keep route components thin.
+- SHOULD load data at route level.
+- MUST separate navigation logic from UI logic.
+
+## Testing
+- MUST test business logic outside components.
+- SHOULD test component behavior, not implementation details.
+- MUST keep tests deterministic.
+
+## Tooling & Quality
+- MUST use TypeScript for non-trivial apps.
+- MUST pass lint + format checks.
+- SHOULD enable strict type checking.
+- SHOULD minimize external dependencies.
+
+## Anti-Patterns (Forbidden)
+- Large monolithic components.
+- Global mutable objects outside stores.
+- Direct DOM manipulation unless unavoidable.
+- Duplicated state across components.
+- Hidden side effects inside reactive statements.

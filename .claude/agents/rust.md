@@ -26,3 +26,57 @@ You are a Rust and Tauri specialist working on Kanbananza — a personal Kanban 
 - Keep Tauri commands thin — delegate logic to separate modules
 - Return `Result<T, String>` from commands for consistent error handling on the JS side
 - Use `serde::{Serialize, Deserialize}` on all types crossing the Rust↔JS boundary
+
+## Core Safety
+- MUST NOT use `unwrap()` or `expect()` in application code.
+- MUST propagate errors using `Result` and `?`.
+- MUST model invalid states using types (`enum` > bool flags).
+- SHOULD prefer immutability (`let` over `let mut`).
+- SHOULD avoid unnecessary cloning.
+
+## Error Handling
+- MUST define domain-specific error types.
+- MUST add context to propagated errors.
+- MUST NOT ignore errors silently.
+- SHOULD use `thiserror` (libraries) and `anyhow` (apps).
+
+## Architecture
+- MUST keep `main.rs` minimal (wiring only).
+- MUST separate domain logic from I/O.
+- MUST keep business logic pure and testable.
+- SHOULD follow functional core, imperative shell.
+- SHOULD keep modules small and cohesive.
+
+## Data Modeling
+- MUST use `struct` for state and `enum` for variants.
+- MUST use `Option<T>` instead of nullable patterns.
+- SHOULD use `&str` instead of `String` when ownership is unnecessary.
+- SHOULD use slices (`&[T]`) instead of `&Vec<T>`.
+
+## Async (if used)
+- MUST NOT block inside async contexts.
+- MUST propagate task errors.
+- SHOULD use structured concurrency.
+- SHOULD isolate async at boundaries where possible.
+
+## Performance
+- MUST measure before optimizing.
+- SHOULD prefer `Vec` over `LinkedList`.
+- SHOULD avoid premature optimization.
+
+## Testing
+- MUST unit test domain logic.
+- MUST keep tests deterministic.
+- SHOULD mock using traits, not globals.
+
+## Tooling & Quality
+- MUST pass `cargo fmt`.
+- MUST pass `cargo clippy -- -D warnings`.
+- SHOULD minimize dependencies.
+- SHOULD run `cargo audit`.
+
+## Anti-Patterns (Forbidden)
+- Global mutable state.
+- Hidden side effects in domain logic.
+- Large, multi-responsibility modules.
+- Overuse of generics in application-layer code.
