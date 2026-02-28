@@ -3,20 +3,13 @@
   import type { Week } from '$lib/types';
   import { invoke } from '@tauri-apps/api/core';
   import { summariseWeek } from '$lib/api/ai';
+  import { formatDateRange } from '$lib/utils';
 
   type WeekRow = Week & { cardCount: number; summarising: boolean };
 
   let weeks = $state<WeekRow[]>([]);
   let loading = $state(true);
   let error = $state<string | null>(null);
-
-  function formatDateRange(startDate: string): string {
-    const monday = new Date(startDate + 'T00:00:00');
-    const friday = new Date(monday);
-    friday.setDate(monday.getDate() + 4);
-    const opts: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
-    return `${monday.toLocaleDateString('en-US', opts)} – ${friday.toLocaleDateString('en-US', { ...opts, year: 'numeric' })}`;
-  }
 
   onMount(async () => {
     try {

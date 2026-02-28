@@ -3,6 +3,8 @@ pub mod commands;
 pub mod db;
 pub mod integrations;
 pub mod types;
+#[cfg(test)]
+pub mod tests;
 
 use commands::{
     ai::summarise_week,

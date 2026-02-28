@@ -225,3 +225,62 @@ pub async fn create_card_from_url(
 
     Ok(card)
 }
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::extract_page_id;
+
+    // Plain 32-char hex ID — no title slug, no query params.
+    #[test]
+    fn plain_32_hex_id() {
+        let url = "https://notion.so/0123456789abcdef0123456789abcdef";
+        assert_eq!(
+            extract_page_id(url).unwrap(),
+            "0123456789abcdef0123456789abcdef"
+        );
+    }
+
+    // The ID is the trailing hex portion after a human-readable title slug.
+    #[test]
+    fn id_after_title_slug() {
+        let url = "https://www.notion.so/myworkspace/My-Document-Title-0123456789abcdef0123456789abcdef";
+        assert_eq!(
+            extract_page_id(url).unwrap(),
+            "0123456789abcdef0123456789abcdef"
+        );
+    }
+
+    // A trailing slash must not confuse the segment splitter.
+    #[test]
+    fn trailing_slash() {
+        let url = "https://notion.so/0123456789abcdef0123456789abcdef/";
+        assert_eq!(
+            extract_page_id(url).unwrap(),
+            "0123456789abcdef0123456789abcdef"
+        );
+    }
+
+    // Everything after '?' must be stripped before parsing.
+    #[test]
+    fn query_params_stripped() {
+        let url = "https://notion.so/0123456789abcdef0123456789abcdef?pvs=4&foo=bar";
+        assert_eq!(
+            extract_page_id(url).unwrap(),
+            "0123456789abcdef0123456789abcdef"
+        );
+    }
+
+    // A hex-like segment with fewer than 32 hex chars must return an Err.
+    #[test]
+    fn short_id_returns_err() {
+        let url = "https://notion.so/0123456789abcdef"; // only 16 hex chars
+        assert!(
+            extract_page_id(url).is_err(),
+            "expected Err for a segment with fewer than 32 hex chars"
+        );
+    }
+}

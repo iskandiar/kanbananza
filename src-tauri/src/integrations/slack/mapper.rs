@@ -242,3 +242,58 @@ pub async fn create_card_from_url(
 
     Ok(card)
 }
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::parse_slack_url;
+
+    // A standard Slack thread URL.
+    #[test]
+    fn normal_url() {
+        let url = "https://myworkspace.slack.com/archives/C01234567/p1234567890123456";
+        let (channel_id, thread_ts) = parse_slack_url(url).unwrap();
+        assert_eq!(channel_id, "C01234567");
+        assert_eq!(thread_ts, "1234567890.123456");
+    }
+
+    // The 'p' prefix is stripped and a dot is inserted at position 10.
+    #[test]
+    fn p_prefixed_ts_dot_insertion() {
+        let url = "https://workspace.slack.com/archives/CABC123/p9876543210654321";
+        let (channel_id, thread_ts) = parse_slack_url(url).unwrap();
+        assert_eq!(channel_id, "CABC123");
+        assert_eq!(thread_ts, "9876543210.654321");
+    }
+
+    // Query params after '?' must be stripped before parsing.
+    #[test]
+    fn query_params_stripped() {
+        let url = "https://myworkspace.slack.com/archives/C01234567/p1234567890123456?thread_ts=1234567890.123456&cid=C01234567";
+        let (channel_id, thread_ts) = parse_slack_url(url).unwrap();
+        assert_eq!(channel_id, "C01234567");
+        assert_eq!(thread_ts, "1234567890.123456");
+    }
+
+    // Fragment (#...) after the path must also be stripped.
+    #[test]
+    fn fragment_stripped() {
+        let url = "https://myworkspace.slack.com/archives/C01234567/p1234567890123456#top";
+        let (channel_id, thread_ts) = parse_slack_url(url).unwrap();
+        assert_eq!(channel_id, "C01234567");
+        assert_eq!(thread_ts, "1234567890.123456");
+    }
+
+    // A URL without the 'archives' path segment must return an Err.
+    #[test]
+    fn missing_archives_returns_err() {
+        let url = "https://myworkspace.slack.com/messages/C01234567/p1234567890123456";
+        assert!(
+            parse_slack_url(url).is_err(),
+            "expected Err when 'archives' segment is absent"
+        );
+    }
+}
