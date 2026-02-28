@@ -42,9 +42,9 @@
     sumHours([...tasks.filter(t => t.status !== 'done'), ...meetings.filter(m => m.status !== 'done')])
   );
 
-  // Pending tasks for DnD zone — initialized from prop; kept mutable for svelte-dnd-action
+  // Pending tasks for DnD zone — initialized empty; kept mutable for svelte-dnd-action
   // The $effect syncs updates, preventing stale cached state when parent re-renders.
-  let localPendingTasks = $state(tasks.filter(t => t.status !== 'done'));
+  let localPendingTasks = $state<Card[]>([]);
   $effect(() => { localPendingTasks = tasks.filter(t => t.status !== 'done'); });
 
   // Done and pending tasks/meetings for collapsed section

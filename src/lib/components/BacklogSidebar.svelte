@@ -31,8 +31,8 @@
     onCardCreated?: (card: Card) => void;
   } = $props();
 
-  // Local mutable copy for svelte-dnd-action; initialized from prop and synced via $effect
-  let localCards = $state(cards);
+  // Local mutable copy for svelte-dnd-action; initialized empty and synced via $effect
+  let localCards = $state<Card[]>([]);
   $effect(() => { localCards = cards; });
 
   let searchQuery = $state('');

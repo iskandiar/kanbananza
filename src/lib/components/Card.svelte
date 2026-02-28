@@ -89,13 +89,19 @@
   // Editing state
   let isEditing = $state(false);
   let editTitle = $state('');
-  let editCardType = $state<CardType>(card.card_type);
+  let editCardType = $state<CardType>('task');
   let editImpact = $state('');
   let editHours = $state('');
   let editUrl = $state('');
   let editNotes = $state('');
   let confirmingDelete = $state(false);
   let saveError = $state<string | null>(null);
+
+  $effect(() => {
+    if (isEditing) {
+      editCardType = card.card_type;
+    }
+  });
 
   function startEdit() {
     editTitle = card.title;
