@@ -24,6 +24,17 @@ export interface Card {
   metadata: string | null; // JSON string
   created_at: string;
   updated_at: string;
+  project_id: number | null;
+  done_at: string | null;
+}
+
+export interface Project {
+  id: number;
+  name: string;
+  slug: string;        // 2-3 letter AI-generated, e.g. "API", "FRN"
+  color: string;       // hex color, e.g. "#6366f1"
+  archived: boolean;
+  created_at: string;
 }
 
 export interface Week {

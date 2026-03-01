@@ -4,7 +4,7 @@ use rusqlite::types::Value;
 use rusqlite::Connection;
 use tauri::State;
 
-const SELECT: &str = "SELECT id,title,card_type,status,impact,time_estimate,url,week_id,day_of_week,position,source,external_id,notes,metadata,created_at,updated_at FROM cards";
+const SELECT: &str = "SELECT id,title,card_type,status,impact,time_estimate,url,week_id,day_of_week,position,source,external_id,notes,metadata,created_at,updated_at,project_id,done_at FROM cards";
 
 // ---------------------------------------------------------------------------
 // Pure-DB helpers — take &Connection directly so tests can call them without
@@ -41,6 +41,7 @@ pub(crate) fn db_create_card(
     card_type: &CardType,
     week_id: Option<i64>,
     day_of_week: Option<i64>,
+    project_id: Option<i64>,
 ) -> Result<Card, String> {
     let position: i64 = db
         .query_row(
@@ -55,8 +56,8 @@ pub(crate) fn db_create_card(
         .unwrap_or("task")
         .to_string();
     db.execute(
-        "INSERT INTO cards (title,card_type,week_id,day_of_week,position) VALUES (?,?,?,?,?)",
-        rusqlite::params![title, card_type_str, week_id, day_of_week, position],
+        "INSERT INTO cards (title,card_type,week_id,day_of_week,position,project_id) VALUES (?,?,?,?,?,?)",
+        rusqlite::params![title, card_type_str, week_id, day_of_week, position, project_id],
     )
     .map_err(|e| e.to_string())?;
     let id = db.last_insert_rowid();
@@ -79,18 +80,33 @@ pub(crate) fn db_update_card(
     notes: Option<String>,
     clear_week: Option<bool>,
     card_type: Option<String>,
+    project_id: Option<i64>,
+    clear_project_id: Option<bool>,
 ) -> Result<Card, String> {
     let mut parts: Vec<String> = Vec::new();
     let mut vals: Vec<Value> = Vec::new();
 
     if let Some(v) = title         { parts.push("title=?".into());          vals.push(Value::Text(v)); }
-    if let Some(v) = status        { parts.push("status=?".into());         vals.push(Value::Text(v)); }
+    if let Some(v) = status.clone() { parts.push("status=?".into());        vals.push(Value::Text(v)); }
     if let Some(v) = impact        { parts.push("impact=?".into());         vals.push(Value::Text(v)); }
     if let Some(v) = time_estimate { parts.push("time_estimate=?".into());  vals.push(Value::Real(v)); }
     if let Some(v) = url           { parts.push("url=?".into());            vals.push(Value::Text(v)); }
     if let Some(v) = position      { parts.push("position=?".into());       vals.push(Value::Integer(v)); }
     if let Some(v) = notes         { parts.push("notes=?".into());          vals.push(Value::Text(v)); }
     if let Some(v) = card_type     { parts.push("card_type=?".into());      vals.push(Value::Text(v)); }
+    if clear_project_id == Some(true) {
+        parts.push("project_id=NULL".into());
+    } else if let Some(v) = project_id {
+        parts.push("project_id=?".into()); vals.push(Value::Integer(v));
+    }
+
+    if let Some(ref s) = status {
+        if s == "done" {
+            parts.push("done_at=datetime('now')".into());
+        } else {
+            parts.push("done_at=NULL".into());
+        }
+    }
 
     if clear_week == Some(true) {
         // Embed NULLs directly — no placeholder needed
@@ -135,11 +151,12 @@ pub async fn create_card(
     card_type: CardType, // validated enum — rejects unknown types at the boundary
     week_id: Option<i64>,
     day_of_week: Option<i64>,
+    project_id: Option<i64>,
     state: State<'_, DbState>,
 ) -> Result<Card, String> {
     let (card_id, card) = {
         let db = state.0.lock().map_err(|e| e.to_string())?;
-        let card = db_create_card(&db, &title, &card_type, week_id, day_of_week)?;
+        let card = db_create_card(&db, &title, &card_type, week_id, day_of_week, project_id)?;
         (card.id, card)
     }; // DB lock released
 
@@ -166,12 +183,15 @@ pub fn update_card(
     // Needed because JSON null and absent field both deserialize to Option::None.
     clear_week: Option<bool>,
     card_type: Option<String>,
+    project_id: Option<i64>,
+    // When true, sets project_id=NULL (unassign from project).
+    clear_project_id: Option<bool>,
     state: State<DbState>,
 ) -> Result<Card, String> {
     let db = state.0.lock().map_err(|e| e.to_string())?;
     db_update_card(
         &db, id, title, status, impact, time_estimate, url, week_id, day_of_week, position,
-        notes, clear_week, card_type,
+        notes, clear_week, card_type, project_id, clear_project_id,
     )
 }
 
@@ -196,6 +216,10 @@ mod tests {
             .unwrap();
         db.execute_batch(include_str!("../../migrations/0002_auto_ai.sql"))
             .unwrap();
+        db.execute_batch(include_str!("../../migrations/0003_projects.sql"))
+            .unwrap();
+        let _ = db.execute("ALTER TABLE cards ADD COLUMN project_id INTEGER REFERENCES projects(id)", []);
+        let _ = db.execute("ALTER TABLE cards ADD COLUMN done_at TEXT", []);
         db
     }
 
@@ -212,7 +236,7 @@ mod tests {
             .query_row("SELECT id FROM weeks WHERE year=2026 AND week_number=9", [], |r| r.get(0))
             .unwrap();
 
-        let card = db_create_card(&db, "Test card", &CardType::Task, Some(week_id), Some(1))
+        let card = db_create_card(&db, "Test card", &CardType::Task, Some(week_id), Some(1), None)
             .unwrap();
 
         assert_eq!(card.title, "Test card");
@@ -228,13 +252,15 @@ mod tests {
     #[test]
     fn update_status_and_title_persists() {
         let db = open_test_db();
-        let card = db_create_card(&db, "Original", &CardType::Task, None, None).unwrap();
+        let card = db_create_card(&db, "Original", &CardType::Task, None, None, None).unwrap();
 
         let updated = db_update_card(
             &db,
             card.id,
             Some("Renamed".to_string()),
             Some("done".to_string()),
+            None,
+            None,
             None,
             None,
             None,
@@ -271,12 +297,14 @@ mod tests {
             .unwrap();
 
         let card =
-            db_create_card(&db, "Placed card", &CardType::Task, Some(week_id), Some(2)).unwrap();
+            db_create_card(&db, "Placed card", &CardType::Task, Some(week_id), Some(2), None).unwrap();
         assert_eq!(card.week_id, Some(week_id));
 
         let moved = db_update_card(
             &db, card.id, None, None, None, None, None, None, None, None, None,
             Some(true), // clear_week
+            None,
+            None,
             None,
         )
         .unwrap();
@@ -295,7 +323,7 @@ mod tests {
     #[test]
     fn delete_card_removes_from_list() {
         let db = open_test_db();
-        let card = db_create_card(&db, "To delete", &CardType::Task, None, None).unwrap();
+        let card = db_create_card(&db, "To delete", &CardType::Task, None, None, None).unwrap();
 
         db_delete_card(&db, card.id).unwrap();
 
@@ -317,20 +345,44 @@ mod tests {
             .query_row("SELECT id FROM weeks WHERE year=2026 AND week_number=9", [], |r| r.get(0))
             .unwrap();
 
-        let c1 = db_create_card(&db, "First",  &CardType::Task, Some(week_id), Some(3)).unwrap();
-        let c2 = db_create_card(&db, "Second", &CardType::Task, Some(week_id), Some(3)).unwrap();
-        let c3 = db_create_card(&db, "Third",  &CardType::Task, Some(week_id), Some(3)).unwrap();
+        let c1 = db_create_card(&db, "First",  &CardType::Task, Some(week_id), Some(3), None).unwrap();
+        let c2 = db_create_card(&db, "Second", &CardType::Task, Some(week_id), Some(3), None).unwrap();
+        let c3 = db_create_card(&db, "Third",  &CardType::Task, Some(week_id), Some(3), None).unwrap();
 
         assert_eq!(c1.position, 1, "first card position must be 1");
         assert_eq!(c2.position, 2, "second card position must be 2");
         assert_eq!(c3.position, 3, "third card position must be 3");
     }
 
+    // Passing clear_project_id: true must set project_id to NULL.
+    #[test]
+    fn clear_project_id_nullifies_project() {
+        let db = open_test_db();
+        db.execute("INSERT INTO projects (name, slug, color) VALUES ('P','P1','#fff')", []).unwrap();
+        let pid: i64 = db
+            .query_row("SELECT id FROM projects WHERE slug='P1'", [], |r| r.get(0))
+            .unwrap();
+        let card = db_create_card(&db, "card", &CardType::Task, None, None, Some(pid)).unwrap();
+        assert_eq!(card.project_id, Some(pid));
+
+        let updated = db_update_card(
+            &db, card.id, None, None, None, None, None, None, None, None, None, None, None,
+            None,       // project_id
+            Some(true), // clear_project_id
+        )
+        .unwrap();
+
+        assert!(
+            updated.project_id.is_none(),
+            "project_id must be NULL after clear_project_id=true"
+        );
+    }
+
     // Updating a card's type must persist the new card type.
     #[test]
     fn update_card_type_persists() {
         let db = open_test_db();
-        let card = db_create_card(&db, "My task", &CardType::Task, None, None).unwrap();
+        let card = db_create_card(&db, "My task", &CardType::Task, None, None, None).unwrap();
         assert_eq!(card.card_type, CardType::Task);
 
         let meeting_str = serde_json::to_value(&CardType::Meeting)
@@ -352,6 +404,8 @@ mod tests {
             None,
             None,
             Some(meeting_str),
+            None,
+            None,
         )
         .unwrap();
 

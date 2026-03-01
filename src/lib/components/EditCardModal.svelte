@@ -1,6 +1,8 @@
 <script lang="ts">
   import type { Card, CardType, Impact } from '$lib/types';
   import { boardStore } from '$lib/stores/board.svelte';
+  import { projectsStore } from '$lib/stores/projects.svelte';
+  import * as cardsApi from '$lib/api/cards';
   import { Users, GitPullRequest, MessageSquare, ListTodo, Eye, FileText, X } from 'lucide-svelte';
 
   let { card, onClose }: { card: Card; onClose: () => void } = $props();
@@ -45,6 +47,7 @@
   let popoverHours = $state('');
   let popoverUrl = $state('');
   let popoverNotes = $state('');
+  let popoverProjectId = $state<number | null>(null);
   let saveError = $state<string | null>(null);
 
   // Initialize and re-sync whenever the card prop changes
@@ -54,11 +57,22 @@
     popoverHours = card.time_estimate != null ? String(card.time_estimate) : '';
     popoverUrl = card.url ?? '';
     popoverNotes = card.notes ?? '';
+    popoverProjectId = card.project_id ?? null;
   });
 
-  async function savePopoverField(fields: Parameters<typeof boardStore.updateCard>[1]) {
+  // Load projects if not already loaded
+  $effect(() => {
+    if (projectsStore.projects.length === 0) {
+      projectsStore.loadProjects();
+    }
+  });
+
+  async function savePopoverField(fields: Parameters<typeof cardsApi.updateCard>[1]) {
     try {
-      await boardStore.updateCard(card.id, fields);
+      const updatedCard = await cardsApi.updateCard(card.id, fields);
+      // Sync updated card into both stores
+      boardStore.cards = boardStore.cards.map(c => c.id === updatedCard.id ? updatedCard : c);
+      projectsStore.syncCard(updatedCard);
       saveError = null;
     } catch (e) {
       saveError = e instanceof Error ? e.message : String(e);
@@ -198,6 +212,33 @@
           onblur={() => savePopoverField(popoverNotes ? { notes: popoverNotes } : {})}
         ></textarea>
       </div>
+
+      <!-- Project selector -->
+      {#if projectsStore.projects.length > 0}
+        <div>
+          <!-- svelte-ignore a11y_label_has_associated_control -->
+          <label class="text-xs text-[var(--color-muted)] block mb-1">Project</label>
+          <select
+            value={popoverProjectId ?? ''}
+            onchange={(e) => {
+              const val = (e.currentTarget as HTMLSelectElement).value;
+              const newId = val === '' ? null : Number(val);
+              popoverProjectId = newId;
+              if (newId === null) {
+                savePopoverField({ clearProjectId: true });
+              } else {
+                savePopoverField({ projectId: newId });
+              }
+            }}
+            class="w-full text-xs bg-[var(--color-surface)] border border-[var(--color-border)] rounded px-2 py-1 text-[var(--color-text)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+          >
+            <option value="">None</option>
+            {#each projectsStore.projects as project (project.id)}
+              <option value={project.id}>[{project.slug}] {project.name}</option>
+            {/each}
+          </select>
+        </div>
+      {/if}
 
       {#if saveError}
         <p class="text-xs text-rose-400">{saveError}</p>

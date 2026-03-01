@@ -2,6 +2,7 @@ pub mod ai;
 pub mod cards;
 pub mod integrations;
 pub mod keychain;
+pub mod projects;
 pub mod rollover;
 pub mod settings;
 pub mod shell;

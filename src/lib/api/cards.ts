@@ -8,8 +8,9 @@ export const createCard = (
   title: string,
   cardType: CardType,
   weekId: number | null,
-  dayOfWeek: number | null
-): Promise<Card> => invoke('create_card', { title, cardType, weekId, dayOfWeek });
+  dayOfWeek: number | null,
+  projectId?: number
+): Promise<Card> => invoke('create_card', { title, cardType, weekId, dayOfWeek, projectId });
 
 export const updateCard = (
   id: number,
@@ -23,8 +24,10 @@ export const updateCard = (
     dayOfWeek?: number;
     position?: number;
     notes?: string;
-    clearWeek?: boolean; // set week_id=NULL and day_of_week=NULL (move to backlog)
+    clearWeek?: boolean;      // set week_id=NULL and day_of_week=NULL (move to backlog)
     cardType?: CardType;
+    projectId?: number;       // assign to a project
+    clearProjectId?: boolean; // set project_id=NULL (unassign from project)
   }
 ): Promise<Card> => invoke('update_card', { id, ...fields });
 

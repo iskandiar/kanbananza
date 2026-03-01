@@ -50,6 +50,10 @@ mod tests {
             .unwrap();
         db.execute_batch(include_str!("../../migrations/0002_auto_ai.sql"))
             .unwrap();
+        db.execute_batch(include_str!("../../migrations/0003_projects.sql"))
+            .unwrap();
+        let _ = db.execute("ALTER TABLE cards ADD COLUMN project_id INTEGER REFERENCES projects(id)", []);
+        let _ = db.execute("ALTER TABLE cards ADD COLUMN done_at TEXT", []);
         db
     }
 
@@ -61,9 +65,9 @@ mod tests {
 
         // Create one planned card and one done card in the week.
         let planned =
-            db_create_card(&db, "Planned task", &CardType::Task, Some(week.id), Some(1)).unwrap();
+            db_create_card(&db, "Planned task", &CardType::Task, Some(week.id), Some(1), None).unwrap();
         let done_card =
-            db_create_card(&db, "Done task", &CardType::Task, Some(week.id), Some(1)).unwrap();
+            db_create_card(&db, "Done task", &CardType::Task, Some(week.id), Some(1), None).unwrap();
 
         // Mark the second card as done directly in the DB.
         db.execute(

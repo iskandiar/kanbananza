@@ -66,6 +66,13 @@
         </button>
       </div>
     {/if}
+    <a
+      href="/projects"
+      class="text-xs px-2.5 py-1 rounded border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-accent)] transition-colors"
+      title="View projects"
+    >
+      Projects
+    </a>
     <button
       onclick={themeStore.toggle}
       class="p-1.5 rounded hover:bg-[var(--color-surface-raised)] text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors"

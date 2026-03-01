@@ -29,6 +29,8 @@ const createMockCard = (overrides: Partial<Card> = {}): Card => ({
   metadata: null,
   created_at: '2024-01-01T00:00:00Z',
   updated_at: '2024-01-01T00:00:00Z',
+  project_id: null,
+  done_at: null,
   ...overrides
 });
 
@@ -63,7 +65,7 @@ describe('BoardStore', () => {
       const cardsByDay = boardStore.cardsByDay;
 
       // Monday (day 1) should have 3 cards
-      const mondayCards = cardsByDay.get(1);
+      const mondayCards = cardsByDay.get(1)!;
       expect(mondayCards).toHaveLength(3);
       // Should be sorted by position
       expect(mondayCards[0].position).toBe(1);
@@ -71,7 +73,7 @@ describe('BoardStore', () => {
       expect(mondayCards[2].position).toBe(3);
 
       // Wednesday (day 3) should have 1 card
-      const wednesdayCards = cardsByDay.get(3);
+      const wednesdayCards = cardsByDay.get(3)!;
       expect(wednesdayCards).toHaveLength(1);
       expect(wednesdayCards[0].id).toBe(4);
     });
@@ -99,7 +101,7 @@ describe('BoardStore', () => {
       ];
 
       const cardsByDay = boardStore.cardsByDay;
-      const mondayCards = cardsByDay.get(1);
+      const mondayCards = cardsByDay.get(1)!;
 
       // Should only contain the card from the current week
       expect(mondayCards).toHaveLength(1);
@@ -220,7 +222,7 @@ describe('BoardStore', () => {
       ];
 
       const meetingsByDay = boardStore.meetingsByDay;
-      const mondayMeetings = meetingsByDay.get(1);
+      const mondayMeetings = meetingsByDay.get(1)!;
 
       expect(mondayMeetings).toHaveLength(2);
       expect(mondayMeetings.every((c) => c.card_type === 'meeting')).toBe(true);
@@ -237,7 +239,7 @@ describe('BoardStore', () => {
       ];
 
       const tasksByDay = boardStore.tasksByDay;
-      const mondayTasks = tasksByDay.get(1);
+      const mondayTasks = tasksByDay.get(1)!;
 
       expect(mondayTasks).toHaveLength(2);
       expect(mondayTasks.every((c) => c.card_type !== 'meeting')).toBe(true);

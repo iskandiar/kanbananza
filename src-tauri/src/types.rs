@@ -55,6 +55,18 @@ pub struct Card {
     pub metadata: Option<String>,
     pub created_at: String,
     pub updated_at: String,
+    pub project_id: Option<i64>,
+    pub done_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Project {
+    pub id: i64,
+    pub name: String,
+    pub slug: String,
+    pub color: String,
+    pub archived: bool,
+    pub created_at: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

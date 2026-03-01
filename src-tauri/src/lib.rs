@@ -14,6 +14,10 @@ use commands::{
     cards::*,
     integrations::{disconnect_calendar, disconnect_gitlab, get_calendar_auth_url, get_calendar_status, sync_calendar, sync_gitlab, sync_linear, disconnect_linear, create_card_from_url},
     keychain::*,
+    projects::{
+        list_projects, create_project, update_project, archive_project,
+        list_cards_by_project, generate_project_slug, summarise_project,
+    },
     rollover::*,
     settings::*,
     shell::open_url,
@@ -46,6 +50,14 @@ pub fn run() {
                     return Err(format!("failed to run auto_ai migration: {e}").into());
                 }
             }
+            // 0003 adds projects table and new card columns — ignore if already applied.
+            if let Err(e) = conn.execute_batch(include_str!("../migrations/0003_projects.sql")) {
+                if !e.to_string().contains("already exists") {
+                    return Err(format!("failed to run projects migration: {e}").into());
+                }
+            }
+            let _ = conn.execute("ALTER TABLE cards ADD COLUMN project_id INTEGER REFERENCES projects(id)", []);
+            let _ = conn.execute("ALTER TABLE cards ADD COLUMN done_at TEXT", []);
             app.manage(DbState(Mutex::new(conn)));
 
             // OAuth callback is handled via loopback TCP in get_calendar_auth_url —
@@ -135,6 +147,14 @@ pub fn run() {
             disconnect_linear,
             // Universal URL-to-card
             create_card_from_url,
+            // Projects
+            list_projects,
+            create_project,
+            update_project,
+            archive_project,
+            list_cards_by_project,
+            generate_project_slug,
+            summarise_project,
             // AI
             summarise_week,
             // Shell

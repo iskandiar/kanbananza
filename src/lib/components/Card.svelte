@@ -19,11 +19,18 @@
 <script lang="ts">
   import type { Card, Impact } from '$lib/types';
   import { boardStore } from '$lib/stores/board.svelte';
+  import { projectsStore } from '$lib/stores/projects.svelte';
   import { openUrl } from '$lib/api/shell';
   import { Pencil, ExternalLink, Trash2, Check, Users, GitPullRequest, MessageSquare, ListTodo, Eye, FileText, X, GripVertical } from 'lucide-svelte';
   import EditCardModal from './EditCardModal.svelte';
 
   let { card, onMarkDone }: { card: Card; onMarkDone: (id: number) => void } = $props();
+
+  const cardProject = $derived(
+    card.project_id != null
+      ? projectsStore.projects.find(p => p.id === card.project_id) ?? null
+      : null
+  );
 
   const typeBadge: Record<string, string> = {
     meeting: 'bg-blue-500/15 text-blue-300',
@@ -191,6 +198,14 @@
     {/if}
 
     <div class="mt-1.5 flex items-center gap-1.5 flex-wrap">
+      <!-- Project slug badge -->
+      {#if cardProject}
+        <span
+          class="text-xs px-1 py-px rounded border font-mono font-semibold"
+          style="border-color: {cardProject.color}40; background-color: {cardProject.color}15; color: {cardProject.color};"
+        >{cardProject.slug}</span>
+      {/if}
+
       <!-- Type badge: icon + expanding label on hover -->
       <span
         class="text-xs px-1 py-px rounded border border-[var(--color-border)] flex items-center gap-1 {typeBadge[card.card_type] ?? 'bg-slate-500/15 text-slate-300'}"
