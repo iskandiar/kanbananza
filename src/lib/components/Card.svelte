@@ -17,15 +17,11 @@
 </script>
 
 <script lang="ts">
-  import type { Card, CardType, Impact } from '$lib/types';
+  import type { Card, Impact } from '$lib/types';
   import { boardStore } from '$lib/stores/board.svelte';
   import { openUrl } from '$lib/api/shell';
-  import { Pencil, ExternalLink, Trash2, Check, Users, GitPullRequest, MessageSquare, ListTodo, Eye, FileText, X, ChevronDown, GripVertical } from 'lucide-svelte';
-  import IconCalendar from './icons/IconCalendar.svelte';
-  import IconGitLab from './icons/IconGitLab.svelte';
-  import IconLinear from './icons/IconLinear.svelte';
-  import IconSlack from './icons/IconSlack.svelte';
-  import IconNotion from './icons/IconNotion.svelte';
+  import { Pencil, ExternalLink, Trash2, Check, Users, GitPullRequest, MessageSquare, ListTodo, Eye, FileText, X, GripVertical } from 'lucide-svelte';
+  import EditCardModal from './EditCardModal.svelte';
 
   let { card, onMarkDone }: { card: Card; onMarkDone: (id: number) => void } = $props();
 
@@ -37,15 +33,6 @@
     review:  'bg-slate-500/15 text-slate-300',
     documentation: 'bg-slate-500/15 text-slate-300'
   };
-
-  const typeIconCmp = {
-    meeting:       Users,
-    mr:            GitPullRequest,
-    thread:        MessageSquare,
-    task:          ListTodo,
-    review:        Eye,
-    documentation: FileText,
-  } as const;
 
   const typeLabel: Record<string, string> = {
     meeting: 'meeting',
@@ -87,51 +74,43 @@
   const meetingTime = $derived(card.card_type === 'meeting' ? getMeetingTimeRange(card.metadata) : null);
 
   // Editing state
-  let isEditing = $state(false);
+  let isTitleEditing = $state(false);
   let editTitle = $state('');
-  let editCardType = $state<CardType>('task');
-  let editImpact = $state('');
-  let editHours = $state('');
-  let editUrl = $state('');
-  let editNotes = $state('');
+  let isPopoverOpen = $state(false);
   let confirmingDelete = $state(false);
   let saveError = $state<string | null>(null);
 
-  $effect(() => {
-    if (isEditing) {
-      editCardType = card.card_type;
-    }
-  });
-
-  function startEdit() {
+  function startTitleEdit() {
     editTitle = card.title;
-    editCardType = card.card_type;
-    editImpact = displayImpact ?? '';
-    editHours = card.time_estimate != null ? String(card.time_estimate) : '';
-    editUrl = card.url ?? '';
-    editNotes = card.notes ?? '';
-    isEditing = true;
+    isTitleEditing = true;
   }
 
-  function cancelEdit() {
-    isEditing = false;
-    confirmingDelete = false;
+  function cancelTitleEdit() {
+    isTitleEditing = false;
   }
 
-  async function saveField(fields: Parameters<typeof boardStore.updateCard>[1]) {
-    try {
-      await boardStore.updateCard(card.id, fields);
-      saveError = null;
-    } catch (e) {
-      saveError = e instanceof Error ? e.message : String(e);
-    }
-  }
-
-  async function saveAndClose() {
+  async function saveTitleEdit() {
     if (editTitle !== card.title) {
-      await saveField({ title: editTitle });
+      try {
+        await boardStore.updateCard(card.id, { title: editTitle });
+        saveError = null;
+      } catch (e) {
+        saveError = e instanceof Error ? e.message : String(e);
+      }
     }
-    cancelEdit();
+    isTitleEditing = false;
+  }
+
+  function openPopover() {
+    isPopoverOpen = true;
+  }
+
+  function closePopover() {
+    isPopoverOpen = false;
+  }
+
+  function cancelDelete() {
+    confirmingDelete = false;
   }
 
   async function deleteCard() {
@@ -156,14 +135,14 @@
 </script>
 
 <div
-  class="group flex flex-row gap-2 items-start rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 hover:border-[var(--color-accent)]/40 hover:bg-[var(--color-surface-raised)] transition-colors"
-  class:cursor-grab={!isEditing}
-  class:active:cursor-grabbing={!isEditing}
-  class:cursor-default={isEditing}
+  class="group relative flex flex-row gap-2 items-start rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 hover:border-[var(--color-accent)]/40 hover:bg-[var(--color-surface-raised)] transition-colors"
+  class:cursor-grab={!isTitleEditing && !isPopoverOpen}
+  class:active:cursor-grabbing={!isTitleEditing && !isPopoverOpen}
+  class:cursor-default={isTitleEditing || isPopoverOpen}
   class:opacity-40={card.status === 'done'}
   role="article"
 >
-  <div class="flex flex-col items-center gap-1 flex-shrink-0 mt-0.5">
+  <div class="flex flex-col items-center justify-between flex-shrink-0 self-stretch">
     <button
       data-no-dnd="true"
       onclick={handleToggleDone}
@@ -171,8 +150,8 @@
       aria-label={card.status === 'done' ? 'Undo done' : 'Mark done'}
     >{#if card.status === 'done'}<Check size={10} />{/if}</button>
 
-    {#if !isEditing}
-      <div class="text-[var(--color-muted)] opacity-30 group-hover:opacity-70 cursor-grab">
+    {#if !isTitleEditing && !isPopoverOpen}
+      <div class="text-[var(--color-muted)] opacity-30 group-hover:opacity-70 cursor-grab mt-auto">
         <GripVertical size={14} />
       </div>
     {/if}
@@ -182,52 +161,62 @@
     {#if meetingTime}
       <span class="text-xs text-[var(--color-muted)] mb-1 block">{meetingTime}</span>
     {/if}
-    <p
-      class="text-sm text-[var(--color-text)] leading-snug {!isEditing ? 'cursor-text' : ''}"
-      ondblclick={!isEditing ? startEdit : undefined}
-      title={!isEditing ? 'Double-click to edit' : undefined}
-    >{isEditing ? editTitle : card.title}</p>
-    {#if aiFields.description}
-      <div data-no-dnd="true" class="flex items-start gap-1">
-        <p
-          class="text-xs text-[var(--color-muted)] mt-0.5 leading-snug overflow-hidden max-h-[2.4em] hover:max-h-40 transition-[max-height] duration-300 ease-in-out cursor-default flex-1"
-          title={aiFields.description}
-        >{aiFields.description}</p>
-        <span class="text-[var(--color-muted)] mt-0.5 group-hover:hidden"><ChevronDown size={12} /></span>
-      </div>
+
+    {#if isTitleEditing}
+      <input
+        type="text"
+        bind:value={editTitle}
+        use:focus
+        class="w-full text-sm font-medium text-[var(--color-text)] bg-transparent border-0 border-b-2 border-[var(--color-accent)] px-0 py-0 focus:outline-none focus:ring-0"
+        onkeydown={(e) => { if (e.key === 'Enter') saveTitleEdit(); if (e.key === 'Escape') cancelTitleEdit(); }}
+        onblur={saveTitleEdit}
+      />
+    {:else}
+      <!-- svelte-ignore a11y_click_events_have_key_events -->
+      <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+      <p
+        class="text-sm font-medium text-[var(--color-text)] leading-snug cursor-text hover:text-[var(--color-accent)]/80 transition-colors"
+        onclick={startTitleEdit}
+        onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') startTitleEdit(); }}
+        title="Click to edit title"
+      >{card.title}</p>
     {/if}
+
+    {#if aiFields.description && !isTitleEditing && !isPopoverOpen}
+      <p
+        data-no-dnd="true"
+        class="text-xs text-[var(--color-muted)] leading-snug mt-1 line-clamp-2 group-hover:line-clamp-none transition-all cursor-default"
+        title={aiFields.description}
+      >{aiFields.description}</p>
+    {/if}
+
     <div class="mt-1.5 flex items-center gap-1.5 flex-wrap">
-      <span class="text-xs px-1 py-px rounded border border-[var(--color-border)] flex items-center gap-1 {typeBadge[card.card_type] ?? 'bg-slate-500/15 text-slate-300'}">
-        {#if card.card_type === 'meeting'}<Users size={9} />{/if}
-        {#if card.card_type === 'mr'}<GitPullRequest size={9} />{/if}
-        {#if card.card_type === 'thread'}<MessageSquare size={9} />{/if}
-        {#if card.card_type === 'task'}<ListTodo size={9} />{/if}
-        {#if card.card_type === 'review'}<Eye size={9} />{/if}
-        {#if card.card_type === 'documentation'}<FileText size={9} />{/if}
-        {typeLabel[card.card_type]}
+      <!-- Type badge: icon + expanding label on hover -->
+      <span
+        class="text-xs px-1 py-px rounded border border-[var(--color-border)] flex items-center gap-1 {typeBadge[card.card_type] ?? 'bg-slate-500/15 text-slate-300'}"
+        title={card.source !== 'manual' ? `${typeLabel[card.card_type]} · ${sourceLabel[card.source]}` : typeLabel[card.card_type]}
+      >
+        {#if card.card_type === 'meeting'}<Users size={10} />{/if}
+        {#if card.card_type === 'mr'}<GitPullRequest size={10} />{/if}
+        {#if card.card_type === 'thread'}<MessageSquare size={10} />{/if}
+        {#if card.card_type === 'task'}<ListTodo size={10} />{/if}
+        {#if card.card_type === 'review'}<Eye size={10} />{/if}
+        {#if card.card_type === 'documentation'}<FileText size={10} />{/if}
+        <span class="max-w-0 overflow-hidden group-hover:max-w-[4rem] transition-all duration-200 whitespace-nowrap text-[0.65rem]">{typeLabel[card.card_type]}</span>
       </span>
-      {#if card.source !== 'manual'}
-        <span class="flex items-center gap-1 px-1 py-px rounded border border-[var(--color-border)] text-[var(--color-muted)] text-xs" title="Synced from {card.source}">
-          {#if card.source === 'calendar'}<IconCalendar />{/if}
-          {#if card.source === 'gitlab'}<IconGitLab />{/if}
-          {#if card.source === 'linear'}<IconLinear />{/if}
-          {#if card.source === 'slack'}<IconSlack />{/if}
-          {#if card.source === 'notion'}<IconNotion />{/if}
-          <span>{sourceLabel[card.source]}</span>
-        </span>
-      {/if}
+
+      <!-- Impact badge -->
       {#if displayImpact}
         <span class="text-xs border border-[var(--color-border)] {impactBadge[displayImpact]}">{displayImpact}</span>
       {/if}
-      {#if displayImpact && card.time_estimate}
-        <span class="text-xs text-[var(--color-muted)]">·</span>
-      {/if}
+
+      <!-- Time estimate -->
       {#if card.time_estimate}
         <span class="text-xs text-[var(--color-muted)]">{card.time_estimate}h</span>
       {/if}
     </div>
 
-    {#if !isEditing}
+    {#if !isTitleEditing && !isPopoverOpen}
       <div class="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity mt-0.5">
         {#if card.url}
           <button
@@ -238,15 +227,13 @@
             title="Open link"
           ><ExternalLink size={12} /></button>
         {/if}
-        {#if !isEditing}
-          <button
-            data-no-dnd="true"
-            onclick={startEdit}
-            class="text-[var(--color-muted)] hover:text-[var(--color-accent-hover)] transition-colors"
-            aria-label="Edit card"
-            title="Edit card"
-          ><Pencil size={12} /></button>
-        {/if}
+        <button
+          data-no-dnd="true"
+          onclick={openPopover}
+          class="text-[var(--color-muted)] hover:text-[var(--color-accent-hover)] transition-colors"
+          aria-label="Edit card"
+          title="Edit card"
+        ><Pencil size={12} /></button>
         {#if !confirmingDelete}
           <button
             data-no-dnd="true"
@@ -259,7 +246,7 @@
           <span class="text-xs text-rose-400">Delete?</span>
           <button
             data-no-dnd="true"
-            onclick={() => (confirmingDelete = false)}
+            onclick={cancelDelete}
             class="text-[var(--color-muted)] hover:text-[var(--color-text)] transition-colors"
             aria-label="Cancel delete"
           ><X size={12} /></button>
@@ -272,82 +259,10 @@
         {/if}
       </div>
     {/if}
-
-    {#if isEditing}
-      <div data-no-dnd="true" class="mt-2 flex flex-col gap-1.5">
-        <input
-          type="text"
-          bind:value={editTitle}
-          use:focus
-          class="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded px-2 py-1 text-xs text-[var(--color-text)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
-          onkeydown={(e) => { if (e.key === 'Escape') cancelEdit(); }}
-        />
-        <label class="flex items-center gap-2">
-          <span class="text-xs text-[var(--color-muted)]">Type</span>
-          <select
-            bind:value={editCardType}
-            data-no-dnd="true"
-            onchange={() => saveField({ cardType: editCardType })}
-            class="flex-1 text-xs bg-[var(--color-surface)] border border-[var(--color-border)] rounded px-1.5 py-0.5 text-[var(--color-text)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
-          >
-            {#each ['task', 'meeting', 'mr', 'thread', 'review', 'documentation'] as type (type)}
-              <option value={type}>{typeLabel[type as CardType]}</option>
-            {/each}
-          </select>
-        </label>
-        <p class="text-xs text-[var(--color-muted)]">Priority</p>
-        <div class="flex gap-1.5">
-          {#each ['low', 'mid', 'high'] as level (level)}
-            <button
-              type="button"
-              onclick={() => {
-                const newImpact = editImpact === level ? '' : level;
-                editImpact = newImpact;
-                if (newImpact === '') {
-                  saveField({});
-                } else {
-                  saveField({ impact: newImpact as Impact });
-                }
-              }}
-              class="flex-1 text-xs py-0.5 rounded border transition-colors {editImpact === level ? 'border-[var(--color-accent)]/60 text-[var(--color-accent)] bg-[var(--color-accent)]/10' : 'border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]'}"
-            >{level}</button>
-          {/each}
-        </div>
-        <input
-          type="number"
-          bind:value={editHours}
-          step="any"
-          min="0"
-          placeholder="hours"
-          class="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded px-2 py-1 text-xs text-[var(--color-text)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
-          onblur={() => { editHours !== '' && saveField({ timeEstimate: Number(editHours) }); }}
-          onkeydown={(e) => { if (e.key === 'Escape') cancelEdit(); }}
-        />
-        <input
-          type="text"
-          bind:value={editUrl}
-          placeholder="https://…"
-          class="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded px-2 py-1 text-xs text-[var(--color-text)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
-          onblur={() => saveField(editUrl ? { url: editUrl } : {})}
-          onkeydown={(e) => { if (e.key === 'Escape') cancelEdit(); }}
-        />
-        <textarea
-          bind:value={editNotes}
-          placeholder="Notes…"
-          rows="2"
-          class="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded px-2 py-1 text-xs text-[var(--color-text)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)] resize-none"
-          onblur={() => saveField(editNotes ? { notes: editNotes } : {})}
-          onkeydown={(e) => { if (e.key === 'Escape') cancelEdit(); }}
-        ></textarea>
-        <button
-          type="button"
-          onclick={saveAndClose}
-          class="text-xs py-1 rounded border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] transition-colors"
-        >Save</button>
-        {#if saveError}
-          <p class="text-xs text-rose-400">{saveError}</p>
-        {/if}
-      </div>
-    {/if}
   </div>
+
 </div>
+
+{#if isPopoverOpen}
+  <EditCardModal {card} onClose={closePopover} />
+{/if}
