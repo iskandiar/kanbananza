@@ -15,31 +15,34 @@ pub const SYSTEM_PROMPT_SLACK: &str =
      express as decimal hours). Omit ai_impact.";
 
 pub const SYSTEM_PROMPT_MR: &str =
-    "JSON only. Keys: ai_title (<=6 words), ai_description (1-2 sentences), \
-     ai_impact (high|medium|low), \
-     ai_hours (realistic decimal hours — calibrate by lines changed: \
-     1-5 lines=0.1, 6-30 lines=0.25, 31-100 lines=0.5, \
-     101-300 lines=1, 301-600 lines=2, 600+ lines=3+; \
-     omit for meetings).";
+    "JSON only. Keys: ai_title (<=6 words), ai_description (1-2 sentences summarising \
+     what changes and why), ai_impact (high|medium|low — based on scope of changes, \
+     risk, and blast radius), \
+     ai_hours (realistic decimal hours for review — calibrate by lines changed: \
+     1-5=0.1, 6-30=0.25, 31-100=0.5, 101-300=1, 301-600=2, 600+=3+). \
+     No markdown wrapping.";
 
 pub const SYSTEM_PROMPT_MEETING: &str =
-    "JSON only. Keys: ai_title (<=6 words), ai_description (1-2 sentences), \
-     ai_impact (high|medium|low), \
-     ai_hours (realistic decimal hours — calibrate by lines changed: \
-     1-5 lines=0.1, 6-30 lines=0.25, 31-100 lines=0.5, \
-     101-300 lines=1, 301-600 lines=2, 600+ lines=3+; \
-     omit for meetings).";
+    "JSON only. Keys: ai_title (<=6 words), ai_description (1-2 sentences describing \
+     the meeting purpose and expected outcome), \
+     ai_impact (high|medium|low — assess based on attendees, decision-making significance, \
+     and business impact). \
+     Omit ai_hours (duration is already known from the calendar event). \
+     No markdown wrapping.";
 
 pub const SYSTEM_PROMPT_GENERIC: &str =
     "JSON only. Keys: ai_title (<=6 words), ai_description (1-2 sentences), \
-     ai_impact (high|medium|low), \
-     ai_hours (realistic decimal hours — calibrate by lines changed: \
-     1-5 lines=0.1, 6-30 lines=0.25, 31-100 lines=0.5, \
-     101-300 lines=1, 301-600 lines=2, 600+ lines=3+; \
-     omit for meetings).";
+     ai_impact (high|medium|low — assess by urgency and business scope), \
+     ai_hours (realistic decimal hours to complete this task; default to 0.5 if unclear). \
+     No markdown wrapping.";
 
 pub const SYSTEM_PROMPT_WEEK_SUMMARY: &str =
-    "Summarize this work week in exactly 5 sentences.";
+    "You are summarising a developer's work week from their Kanban cards. Write exactly \
+     5 sentences in this order: (1) overall theme and main focus area, (2) key tasks \
+     completed and their impact, (3) significant reviews or meetings attended, \
+     (4) estimated hours of work and any time pressure, (5) what to carry into next week. \
+     Be specific and professional. Use first-person past tense. Do not invent details \
+     not present in the card data.";
 
 /// Builds the Linear system prompt at runtime because it embeds two
 /// context-dependent values: `ai_impact` (derived from priority) and
@@ -47,7 +50,7 @@ pub const SYSTEM_PROMPT_WEEK_SUMMARY: &str =
 pub fn build_linear_system_prompt(ai_impact: &str, hours_hint: &str) -> String {
     format!(
         "JSON only. Keys: ai_title (<=6 words), ai_description (1-2 sentences), \
-         ai_impact (high|mid|low — use \"{ai_impact}\" as default based on priority), \
+         ai_impact (high|medium|low — use \"{ai_impact}\" as default based on priority), \
          ai_hours (realistic decimal hours).{hours_hint}"
     )
 }

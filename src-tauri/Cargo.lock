@@ -1993,7 +1993,7 @@ dependencies = [
 
 [[package]]
 name = "kanbananza"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "async-openai",
  "base64 0.22.1",

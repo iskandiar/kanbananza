@@ -24,12 +24,12 @@ pub async fn summarise_week(week_id: i64, state: State<'_, DbState>) -> Result<S
             .ok_or_else(|| "OpenAI API key not configured".to_string())?;
 
         let mut stmt = db
-            .prepare("SELECT card_type, title, status FROM cards WHERE week_id=?")
+            .prepare("SELECT card_type, title, status, metadata FROM cards WHERE week_id=?")
             .map_err(|e| e.to_string())?;
 
-        let cards: Vec<(String, String, String)> = stmt
+        let cards: Vec<(String, String, String, Option<String>)> = stmt
             .query_map(rusqlite::params![week_id], |r| {
-                Ok((r.get(0)?, r.get(1)?, r.get(2)?))
+                Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))
             })
             .map_err(|e| e.to_string())?
             .filter_map(|r| r.ok())
@@ -45,7 +45,20 @@ pub async fn summarise_week(week_id: i64, state: State<'_, DbState>) -> Result<S
     // Phase B: AI call
     let user_msg = cards
         .iter()
-        .map(|(t, title, status)| format!("{t}: {title} [{status}]"))
+        .map(|(t, title, status, metadata)| {
+            let mut line = format!("{t}: {title} [{status}]");
+            if let Some(meta_json) = metadata {
+                if let Ok(meta) = serde_json::from_str::<serde_json::Value>(meta_json) {
+                    if let Some(desc) = meta.get("ai_description").and_then(|v| v.as_str()) {
+                        line.push_str(&format!("\n  Description: {desc}"));
+                    }
+                    if let Some(hours) = meta.get("ai_hours").and_then(|v| v.as_f64()) {
+                        line.push_str(&format!("\n  Estimate: {hours}h"));
+                    }
+                }
+            }
+            line
+        })
         .collect::<Vec<_>>()
         .join("\n");
 
