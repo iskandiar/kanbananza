@@ -220,25 +220,30 @@
         <div>
           <!-- svelte-ignore a11y_label_has_associated_control -->
           <label class="text-xs text-[var(--color-muted)] block mb-1">Project</label>
-          <select
-            value={popoverProjectId ?? ''}
-            onchange={(e) => {
-              const val = (e.currentTarget as HTMLSelectElement).value;
-              const newId = val === '' ? null : Number(val);
-              popoverProjectId = newId;
-              if (newId === null) {
-                savePopoverField({ clearProjectId: true });
-              } else {
-                savePopoverField({ projectId: newId });
-              }
-            }}
-            class="w-full text-xs bg-[var(--color-surface)] border border-[var(--color-border)] rounded px-2 py-1 text-[var(--color-text)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
-          >
-            <option value="">None</option>
-            {#each projectsStore.projects as project (project.id)}
-              <option value={project.id}>[{project.slug}] {project.name}</option>
-            {/each}
-          </select>
+          <div class="relative">
+            <select
+              value={popoverProjectId ?? ''}
+              onchange={(e) => {
+                const val = (e.currentTarget as HTMLSelectElement).value;
+                const newId = val === '' ? null : Number(val);
+                popoverProjectId = newId;
+                if (newId === null) {
+                  savePopoverField({ clearProjectId: true });
+                } else {
+                  savePopoverField({ projectId: newId });
+                }
+              }}
+              class="appearance-none w-full text-xs bg-[var(--color-surface)] border border-[var(--color-border)] rounded px-2 py-1 pr-6 text-[var(--color-text)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+            >
+              <option value="">None</option>
+              {#each projectsStore.projects as project (project.id)}
+                <option value={project.id}>[{project.slug}] {project.name}</option>
+              {/each}
+            </select>
+            <svg class="absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none w-3 h-3 text-[var(--color-muted)]" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M4 6l4 4 4-4"/>
+            </svg>
+          </div>
         </div>
       {/if}
 

@@ -202,13 +202,13 @@
     {#if aiFields.description && !isTitleEditing && !isPopoverOpen}
       <p
         data-no-dnd="true"
-        class="text-xs text-[var(--color-muted)] leading-snug mt-1 line-clamp-2 group-hover:line-clamp-none transition-all cursor-default"
+        class="text-xs text-[var(--color-text-muted)] leading-snug mt-1 line-clamp-2 group-hover:line-clamp-none transition-all cursor-default"
         title={aiFields.description}
       >{aiFields.description}</p>
     {/if}
 
     {#if card.notes && !isTitleEditing && !isPopoverOpen}
-      <p class="text-xs text-[var(--color-muted)] leading-snug mt-1 line-clamp-2 group-hover:line-clamp-none transition-all cursor-default">{card.notes}</p>
+      <p class="text-xs text-[var(--color-text-muted)] leading-snug mt-1 line-clamp-2 group-hover:line-clamp-none transition-all cursor-default">{card.notes}</p>
     {/if}
 
     <div class="mt-1.5 flex items-center gap-1.5 flex-wrap">

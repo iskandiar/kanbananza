@@ -90,7 +90,8 @@
   onMount(async () => {
     await settingsStore.load();
     availableHours = settingsStore.availableHours;
-    selectedProvider = settingsStore.settings?.ai_provider ?? 'anthropic';
+    selectedProvider = settingsStore.settings?.ai_provider ?? 'openai';
+    if (selectedProvider === 'anthropic') selectedProvider = 'openai';
     autoAiEnabled = settingsStore.settings?.auto_ai ?? false;
     await loadKeyStatus(selectedProvider);
   });
@@ -146,16 +147,21 @@
 
       <!-- Provider pill toggle -->
       <div class="flex items-center gap-1 p-0.5 rounded-md bg-[var(--color-surface)] border border-[var(--color-border)] w-fit mb-4">
-        {#each (['anthropic', 'openai'] as AiProvider[]) as provider (provider)}
-          <button
-            onclick={() => selectProvider(provider)}
-            class="px-3 py-1 rounded text-sm transition-colors {selectedProvider === provider
-              ? 'bg-indigo-600 text-white'
-              : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'}"
-          >
-            {provider === 'anthropic' ? 'Anthropic' : 'OpenAI'}
-          </button>
-        {/each}
+        <button
+          onclick={() => selectProvider('openai')}
+          class="px-3 py-1 rounded text-sm transition-colors {selectedProvider === 'openai'
+            ? 'bg-indigo-600 text-white'
+            : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'}"
+        >
+          OpenAI
+        </button>
+        <button
+          disabled
+          class="px-3 py-1 rounded text-sm transition-colors text-[var(--color-text-muted)] opacity-50 cursor-not-allowed relative"
+        >
+          Anthropic
+          <span class="ml-1.5 text-[10px] bg-[var(--color-border)] px-1 rounded">Soon</span>
+        </button>
       </div>
 
       <!-- API key input -->
@@ -183,6 +189,9 @@
         {#if keySaved}
           <span class="text-xs text-emerald-500">Saved</span>
         {/if}
+        <p class="text-xs text-[var(--color-text-muted)] mt-2">
+          Using <span class="font-mono">gpt-4o-mini</span> — fast &amp; affordable
+        </p>
       </div>
 
       <!-- Auto-evaluate toggle -->

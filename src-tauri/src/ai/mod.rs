@@ -1,7 +1,9 @@
 pub mod client;
+pub mod prompts;
 
 use crate::db::DbState;
 use client::OpenAiClient;
+use prompts::*;
 use rusqlite::OptionalExtension;
 
 /// Builds an OpenAiClient from the stored secret if ai_provider = 'openai'
@@ -124,11 +126,7 @@ pub async fn evaluate_card(card_id: i64, db_state: &DbState) -> Result<(), Strin
                 .map(|pts| format!(" Use {:.1} hours as a starting estimate (story points * 0.5).", pts * 0.5))
                 .unwrap_or_default();
 
-            let sys = format!(
-                "JSON only. Keys: ai_title (<=6 words), ai_description (1-2 sentences), \
-                 ai_impact (high|mid|low — use \"{ai_impact}\" as default based on priority), \
-                 ai_hours (realistic decimal hours).{hours_hint}"
-            );
+            let sys = build_linear_system_prompt(ai_impact, &hours_hint);
             (sys, msg)
         }
         ("documentation", "notion") => {
@@ -141,11 +139,7 @@ pub async fn evaluate_card(card_id: i64, db_state: &DbState) -> Result<(), Strin
                 .and_then(|v| v.as_str())
                 .unwrap_or("");
 
-            let sys = "JSON only. Keys: ai_title (<=6 words), ai_description (1-2 sentences), \
-                       ai_hours (realistic time to read and act on this document: \
-                       reading at ~250 words/min + action buffer; express as decimal hours, \
-                       minimum 0.1). Omit ai_impact."
-                .to_string();
+            let sys = SYSTEM_PROMPT_NOTION.to_string();
             let msg = format!(
                 "Notion Document: {title}\nWord count: {word_count}\n\
                  Content preview:\n{content_preview}"
@@ -170,10 +164,7 @@ pub async fn evaluate_card(card_id: i64, db_state: &DbState) -> Result<(), Strin
                 .and_then(|v| v.as_str())
                 .unwrap_or("");
 
-            let sys = "JSON only. Keys: ai_title (<=6 words), ai_description (1-2 sentences), \
-                       ai_hours (time to read the thread and compose a reply; \
-                       express as decimal hours). Omit ai_impact."
-                .to_string();
+            let sys = SYSTEM_PROMPT_SLACK.to_string();
             let msg = format!(
                 "Slack thread in #{channel_name}\nReply count: {reply_count}\n\
                  First message:\n{first_message}\nRecent replies:\n{thread_preview}"
@@ -194,13 +185,7 @@ pub async fn evaluate_card(card_id: i64, db_state: &DbState) -> Result<(), Strin
             } else {
                 format!("MR: {title}\nLines changed: {lines}\nDescription: {desc}")
             };
-            let sys = "JSON only. Keys: ai_title (<=6 words), ai_description (1-2 sentences), \
-                       ai_impact (high|medium|low), \
-                       ai_hours (realistic decimal hours — calibrate by lines changed: \
-                       1-5 lines=0.1, 6-30 lines=0.25, 31-100 lines=0.5, \
-                       101-300 lines=1, 301-600 lines=2, 600+ lines=3+; \
-                       omit for meetings)."
-                .to_string();
+            let sys = SYSTEM_PROMPT_MR.to_string();
             (sys, msg)
         }
         ("meeting", _) => {
@@ -209,24 +194,12 @@ pub async fn evaluate_card(card_id: i64, db_state: &DbState) -> Result<(), Strin
                 .and_then(|d| d.as_str())
                 .unwrap_or("");
             let hours = time_estimate.unwrap_or(0.0);
-            let sys = "JSON only. Keys: ai_title (<=6 words), ai_description (1-2 sentences), \
-                       ai_impact (high|medium|low), \
-                       ai_hours (realistic decimal hours — calibrate by lines changed: \
-                       1-5 lines=0.1, 6-30 lines=0.25, 31-100 lines=0.5, \
-                       101-300 lines=1, 301-600 lines=2, 600+ lines=3+; \
-                       omit for meetings)."
-                .to_string();
+            let sys = SYSTEM_PROMPT_MEETING.to_string();
             let msg = format!("Meeting: {title}\nDescription: {desc}\nDuration: {hours}h");
             (sys, msg)
         }
         _ => {
-            let sys = "JSON only. Keys: ai_title (<=6 words), ai_description (1-2 sentences), \
-                       ai_impact (high|medium|low), \
-                       ai_hours (realistic decimal hours — calibrate by lines changed: \
-                       1-5 lines=0.1, 6-30 lines=0.25, 31-100 lines=0.5, \
-                       101-300 lines=1, 301-600 lines=2, 600+ lines=3+; \
-                       omit for meetings)."
-                .to_string();
+            let sys = SYSTEM_PROMPT_GENERIC.to_string();
             let msg = format!("Task: {title}");
             (sys, msg)
         }

@@ -1,4 +1,5 @@
 use crate::ai::client::OpenAiClient;
+use crate::ai::prompts::SYSTEM_PROMPT_WEEK_SUMMARY;
 use crate::db::DbState;
 use rusqlite::OptionalExtension;
 use tauri::State;
@@ -49,10 +50,7 @@ pub async fn summarise_week(week_id: i64, state: State<'_, DbState>) -> Result<S
         .join("\n");
 
     let summary = client
-        .complete(
-            "Summarize this work week in exactly 5 sentences.",
-            &user_msg,
-        )
+        .complete(SYSTEM_PROMPT_WEEK_SUMMARY, &user_msg)
         .await?;
 
     // Phase C: save summary

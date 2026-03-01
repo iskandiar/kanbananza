@@ -96,16 +96,21 @@
 
   {#if isOpen && projectsStore.projects.length > 0}
     <div class="px-3 py-1.5 border-b border-[var(--color-border)]">
-      <select
-        bind:value={projectFilter}
-        class="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded px-2 py-1 text-xs text-[var(--color-text)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
-      >
-        <option value="all">All projects</option>
-        <option value="unassigned">Unassigned</option>
-        {#each projectsStore.projects as project (project.id)}
-          <option value={project.id}>[{project.slug}] {project.name}</option>
-        {/each}
-      </select>
+      <div class="relative">
+        <select
+          bind:value={projectFilter}
+          class="appearance-none w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded px-2 py-1 pr-6 text-xs text-[var(--color-text)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+        >
+          <option value="all">All projects</option>
+          <option value="unassigned">Unassigned</option>
+          {#each projectsStore.projects as project (project.id)}
+            <option value={project.id}>[{project.slug}] {project.name}</option>
+          {/each}
+        </select>
+        <svg class="absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none w-3 h-3 text-[var(--color-muted)]" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M4 6l4 4 4-4"/>
+        </svg>
+      </div>
     </div>
   {/if}
 
