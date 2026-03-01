@@ -22,7 +22,7 @@
   }
 </script>
 
-<div class="flex flex-col h-full">
+<div class="flex flex-col min-h-screen">
   <!-- Header -->
   <div class="flex items-center justify-between px-4 py-3 border-b border-[var(--color-glass-border)] bg-[var(--color-glass-header)] backdrop-blur-md">
     <div class="flex items-center gap-3">

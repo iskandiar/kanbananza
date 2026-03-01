@@ -69,9 +69,10 @@
 </script>
 
 <div
-  class="flex flex-col min-w-0 flex-1 border-r border-[var(--color-glass-border)] last:border-r-0 px-3 py-3 gap-3 backdrop-blur-[2px] {isToday ? 'bg-[var(--color-glass-bg)]' : ''}"
+  class="flex flex-col min-w-0 flex-1 border-r border-[var(--color-glass-border)] last:border-r-0 backdrop-blur-[2px] {isToday ? 'bg-[var(--color-glass-bg)]' : ''}"
 >
-  <div>
+  <!-- Static header -->
+  <div class="px-3 pt-3 pb-2 shrink-0">
     <p
       class="text-xs font-semibold text-[var(--color-text-muted)] uppercase tracking-wide"
       class:text-[var(--color-text)]={isToday}
@@ -81,51 +82,59 @@
       class:text-[var(--color-accent)]={isToday}
     >{date}</p>
   </div>
-  <LoadIndicator doneHours={doneHoursByType} plannedHours={plannedHoursByType} {availableHours} />
+  <div class="px-3 pb-2 shrink-0">
+    <LoadIndicator doneHours={doneHoursByType} plannedHours={plannedHoursByType} {availableHours} />
+  </div>
 
-  {#if pendingMeetings.length}
-    <div class="flex flex-col gap-1.5">
-      {#each pendingMeetings as card (card.id)}
+  <!-- Scrollable card area -->
+  <div class="flex-1 overflow-y-auto min-h-0 px-3 py-2">
+    {#if pendingMeetings.length}
+      <div class="flex flex-col gap-1.5 mb-3">
+        {#each pendingMeetings as card (card.id)}
+          <CardComponent {card} {onMarkDone} />
+        {/each}
+      </div>
+    {/if}
+
+    <div
+      class="flex flex-col gap-1.5 min-h-[2rem] mb-3"
+      use:dndzone={{
+        items: localPendingTasks,
+        flipDurationMs: 150,
+        dropTargetStyle: { outline: 'none', background: 'rgba(61,126,255,0.07)', 'border-radius': '6px' }
+      }}
+      onconsider={handleDndConsider}
+      onfinalize={handleDndFinalize}
+    >
+      {#each localPendingTasks as card (card.id)}
         <CardComponent {card} {onMarkDone} />
       {/each}
     </div>
-  {/if}
 
-  <div
-    class="flex flex-col gap-1.5 flex-1 min-h-[2rem]"
-    use:dndzone={{
-      items: localPendingTasks,
-      flipDurationMs: 150,
-      dropTargetStyle: { outline: 'none', background: 'rgba(61,126,255,0.07)', 'border-radius': '6px' }
-    }}
-    onconsider={handleDndConsider}
-    onfinalize={handleDndFinalize}
-  >
-    {#each localPendingTasks as card (card.id)}
-      <CardComponent {card} {onMarkDone} />
-    {/each}
+    {#if doneTasks.length + doneMeetings.length > 0}
+      <div>
+        <button
+          onclick={() => (showDone = !showDone)}
+          class="text-xs text-[var(--color-muted)] hover:text-[var(--color-text)] transition-colors"
+        >
+          {showDone ? '▾' : '▸'} {doneTasks.length + doneMeetings.length} done · {doneHoursByType.toFixed(1)}h consumed
+        </button>
+        {#if showDone}
+          <div class="flex flex-col gap-1.5 mt-1.5 pb-1">
+            {#each doneMeetings as card (card.id)}
+              <CardComponent {card} {onMarkDone} />
+            {/each}
+            {#each doneTasks as card (card.id)}
+              <CardComponent {card} {onMarkDone} />
+            {/each}
+          </div>
+        {/if}
+      </div>
+    {/if}
   </div>
 
-  {#if doneTasks.length + doneMeetings.length > 0}
-    <div>
-      <button
-        onclick={() => (showDone = !showDone)}
-        class="text-xs text-[var(--color-muted)] hover:text-[var(--color-text)] transition-colors"
-      >
-        {showDone ? '▾' : '▸'} {doneTasks.length + doneMeetings.length} done · {doneHoursByType.toFixed(1)}h consumed
-      </button>
-      {#if showDone}
-        <div class="flex flex-col gap-1.5 mt-1.5">
-          {#each doneMeetings as card (card.id)}
-            <CardComponent {card} {onMarkDone} />
-          {/each}
-          {#each doneTasks as card (card.id)}
-            <CardComponent {card} {onMarkDone} />
-          {/each}
-        </div>
-      {/if}
-    </div>
-  {/if}
-
-  <QuickAdd onAdd={onAddCard} {weekId} {dayOfWeek} {onCardCreated} />
+  <!-- QuickAdd pinned to bottom -->
+  <div class="px-3 py-2 shrink-0 border-t border-[var(--color-glass-border)]">
+    <QuickAdd onAdd={onAddCard} {weekId} {dayOfWeek} {onCardCreated} />
+  </div>
 </div>
