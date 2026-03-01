@@ -1,5 +1,6 @@
 <script lang="ts">
   import { themeStore } from '$lib/stores/theme.svelte';
+  import KLogo from '$lib/components/KLogo.svelte';
 
   let {
     weekLabel,
@@ -25,6 +26,8 @@
 
 <header class="relative z-10 flex items-center justify-between px-4 py-3 border-b border-[var(--color-glass-border)] bg-[var(--color-glass-header)] backdrop-blur-md">
   <div class="flex items-center gap-1">
+    <KLogo size={26} theme={themeStore.current} />
+    <span class="w-2"> </span>
     <button
       onclick={onPrev}
       class="p-1.5 rounded hover:bg-[var(--color-surface-raised)] text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors"
@@ -69,7 +72,7 @@
     >
       History
     </a>
-    <span class="border-l border-[var(--color-border)] h-4 self-center mx-0.5" />
+    <span class="border-l border-[var(--color-border)] h-4 self-center mx-0.5"></span>
     {#if isCurrentWeek}
       {#if !rolloverConfirming}
         <button

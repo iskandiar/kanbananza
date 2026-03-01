@@ -6,6 +6,8 @@
   import { listCardsByWeek } from '$lib/api/cards';
   import { formatDateRange } from '$lib/utils';
   import { toastStore } from '$lib/stores/toast.svelte';
+  import KLogo from '$lib/components/KLogo.svelte';
+  import { themeStore } from '$lib/stores/theme.svelte';
 
   type WeekRow = Week & { cardCount: number; summarising: boolean };
 
@@ -50,12 +52,14 @@
 
   <!-- Header -->
   <header class="flex items-center justify-between px-6 py-3 border-b border-[var(--color-border)] shrink-0">
-    <a
-      href="/board"
-      class="text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors"
-    >
-      ← Board
-    </a>
+    <div class="flex items-center gap-3">
+      <KLogo size={26} theme={themeStore.current} />
+      <span class="border-l border-[var(--color-border)] h-4 self-center"></span>
+      <a
+        href="/board"
+        class="text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors"
+      >← Board</a>
+    </div>
     <h1 class="text-sm font-medium text-[var(--color-text)] absolute left-1/2 -translate-x-1/2">
       History
     </h1>

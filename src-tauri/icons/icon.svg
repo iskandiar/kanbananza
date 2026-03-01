@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="1024" height="1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1" gradientUnits="objectBoundingBox">
+      <stop offset="0%"   stop-color="#161A22"/>
+      <stop offset="100%" stop-color="#0D0F14"/>
+    </linearGradient>
+    <linearGradient id="k" x1="256" y1="120" x2="256" y2="392" gradientUnits="userSpaceOnUse">
+      <stop offset="0%"   stop-color="#5A94FF"/>
+      <stop offset="100%" stop-color="#3D7EFF"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="110" ry="110" fill="url(#bg)"/>
+  <rect x="116" y="120" width="64" height="272" rx="6" ry="6" fill="url(#k)"/>
+  <polygon points="180,200 396,120 396,178 180,256" fill="url(#k)"/>
+  <polygon points="180,256 396,334 396,392 180,312" fill="url(#k)"/>
+  <rect x="1.5" y="1.5" width="509" height="509" rx="109" ry="109" fill="none" stroke="rgba(255,255,255,0.09)" stroke-width="1.5"/>
+</svg>

@@ -3,6 +3,8 @@
   import { projectsStore } from '$lib/stores/projects.svelte';
   import ProjectAccordionRow from '$lib/components/ProjectAccordionRow.svelte';
   import CreateProjectModal from '$lib/components/CreateProjectModal.svelte';
+  import KLogo from '$lib/components/KLogo.svelte';
+  import { themeStore } from '$lib/stores/theme.svelte';
 
   let showCreateModal = $state(false);
   let expandedSet = $state(new Set<number>());
@@ -26,6 +28,8 @@
   <!-- Header -->
   <div class="flex items-center justify-between px-4 py-3 border-b border-[var(--color-glass-border)] bg-[var(--color-glass-header)] backdrop-blur-md">
     <div class="flex items-center gap-3">
+      <KLogo size={26} theme={themeStore.current} />
+      <span class="border-l border-[var(--color-glass-border)] h-4 self-center"></span>
       <a
         href="/board"
         class="text-[var(--color-muted)] hover:text-[var(--color-text)] transition-colors text-sm"
