@@ -39,3 +39,9 @@ export const createCardFromUrl = (
   weekId: number | null,
   dayOfWeek: number | null
 ): Promise<Card> => invoke('create_card_from_url', { url, weekId, dayOfWeek });
+
+export const duplicateCard = (id: number): Promise<Card> =>
+  invoke('duplicate_card', { id });
+
+export const searchCards = (query: string): Promise<Card[]> =>
+  invoke('search_cards', { query });

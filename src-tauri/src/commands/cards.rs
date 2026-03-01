@@ -135,6 +135,67 @@ pub(crate) fn db_delete_card(db: &Connection, id: i64) -> Result<(), String> {
     Ok(())
 }
 
+pub(crate) fn db_duplicate_card(db: &Connection, id: i64) -> Result<Card, String> {
+    // 1. Fetch source card
+    let src: Card = db
+        .query_row(&format!("{SELECT} WHERE id=?"), [id], row_to_card)
+        .map_err(|e| e.to_string())?;
+    // 2. Compute next position in same slot
+    let position: i64 = db
+        .query_row(
+            "SELECT COALESCE(MAX(position),0)+1 FROM cards WHERE week_id IS ? AND day_of_week IS ?",
+            rusqlite::params![src.week_id, src.day_of_week],
+            |r| r.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+    // 3. Convert card_type enum to its snake_case string via serde (matches db_create_card pattern)
+    let card_type_str = serde_json::to_value(&src.card_type)
+        .map_err(|e| e.to_string())?
+        .as_str()
+        .unwrap_or("task")
+        .to_string();
+    // 4. Insert copy (external_id not copied)
+    db.execute(
+        "INSERT INTO cards (title,card_type,impact,time_estimate,url,notes,metadata,week_id,day_of_week,position,project_id,status,source)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,'planned','manual')",
+        rusqlite::params![
+            src.title,
+            card_type_str,
+            src.impact.as_ref().and_then(|i| serde_json::to_value(i).ok()).and_then(|v| v.as_str().map(|s| s.to_string())),
+            src.time_estimate,
+            src.url,
+            src.notes,
+            src.metadata,
+            src.week_id,
+            src.day_of_week,
+            position,
+            src.project_id
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+    // 5. Return new card
+    db.query_row(
+        &format!("{SELECT} WHERE id=?"),
+        [db.last_insert_rowid()],
+        row_to_card,
+    )
+    .map_err(|e| e.to_string())
+}
+
+pub(crate) fn db_search_cards(db: &Connection, query: &str) -> Result<Vec<Card>, String> {
+    let pattern = format!("%{}%", query);
+    let sql = format!(
+        "{SELECT} WHERE (title LIKE ?1 OR notes LIKE ?1) ORDER BY updated_at DESC LIMIT 50"
+    );
+    let mut stmt = db.prepare(&sql).map_err(|e| e.to_string())?;
+    let cards = stmt
+        .query_map([&pattern], row_to_card)
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+    Ok(cards)
+}
+
 // ---------------------------------------------------------------------------
 // Tauri commands — thin wrappers that lock the mutex and delegate to helpers.
 // ---------------------------------------------------------------------------
@@ -199,6 +260,18 @@ pub fn update_card(
 pub fn delete_card(id: i64, state: State<DbState>) -> Result<(), String> {
     let db = state.0.lock().map_err(|e| e.to_string())?;
     db_delete_card(&db, id)
+}
+
+#[tauri::command]
+pub fn duplicate_card(id: i64, state: State<DbState>) -> Result<Card, String> {
+    let db = state.0.lock().map_err(|e| e.to_string())?;
+    db_duplicate_card(&db, id)
+}
+
+#[tauri::command]
+pub fn search_cards(query: String, state: State<DbState>) -> Result<Vec<Card>, String> {
+    let db = state.0.lock().map_err(|e| e.to_string())?;
+    db_search_cards(&db, &query)
 }
 
 // ---------------------------------------------------------------------------
@@ -352,6 +425,62 @@ mod tests {
         assert_eq!(c1.position, 1, "first card position must be 1");
         assert_eq!(c2.position, 2, "second card position must be 2");
         assert_eq!(c3.position, 3, "third card position must be 3");
+    }
+
+    // Duplicating a card must produce a new card with the same fields but a new id and
+    // a position one greater than the original in the same slot.
+    #[test]
+    fn duplicate_card_creates_copy_with_incremented_position() {
+        let db = open_test_db();
+        db.execute(
+            "INSERT OR IGNORE INTO weeks (year, week_number, start_date) VALUES (2026, 9, '2026-02-23')",
+            [],
+        )
+        .unwrap();
+        let week_id: i64 = db
+            .query_row("SELECT id FROM weeks WHERE year=2026 AND week_number=9", [], |r| r.get(0))
+            .unwrap();
+
+        let src = db_create_card(&db, "Original", &CardType::Task, Some(week_id), Some(1), None)
+            .unwrap();
+        assert_eq!(src.position, 1);
+
+        let dup = db_duplicate_card(&db, src.id).unwrap();
+
+        assert_ne!(dup.id, src.id, "duplicate must have a new id");
+        assert_eq!(dup.title, src.title);
+        assert_eq!(dup.card_type, src.card_type);
+        assert_eq!(dup.week_id, src.week_id);
+        assert_eq!(dup.day_of_week, src.day_of_week);
+        assert_eq!(dup.position, 2, "duplicate must be placed after the original");
+        assert_eq!(dup.notes, src.notes, "notes must be copied");
+        assert!(dup.external_id.is_none(), "external_id must not be copied");
+    }
+
+    // Searching by title must return matching cards ordered by updated_at DESC.
+    #[test]
+    fn search_cards_matches_title_substring() {
+        let db = open_test_db();
+        db_create_card(&db, "Fix login bug", &CardType::Task, None, None, None).unwrap();
+        db_create_card(&db, "Write documentation", &CardType::Task, None, None, None).unwrap();
+        db_create_card(&db, "Fix signup bug", &CardType::Task, None, None, None).unwrap();
+
+        let results = db_search_cards(&db, "Fix").unwrap();
+        assert_eq!(results.len(), 2, "should return both 'Fix' cards");
+        assert!(
+            results.iter().all(|c| c.title.contains("Fix")),
+            "all results must contain 'Fix'"
+        );
+    }
+
+    // Searching with no matching term must return an empty list.
+    #[test]
+    fn search_cards_no_match_returns_empty() {
+        let db = open_test_db();
+        db_create_card(&db, "Refactor auth", &CardType::Task, None, None, None).unwrap();
+
+        let results = db_search_cards(&db, "nonexistent").unwrap();
+        assert!(results.is_empty(), "no results expected for unmatched query");
     }
 
     // Passing clear_project_id: true must set project_id to NULL.

@@ -3,6 +3,7 @@ import * as cardsApi from '$lib/api/cards';
 import * as weeksApi from '$lib/api/weeks';
 import { listen } from '@tauri-apps/api/event';
 import { isoWeek } from '../utils';
+import { toastStore } from './toast.svelte';
 
 class BoardStore {
   currentWeek = $state<Week | null>(null);
@@ -134,6 +135,21 @@ class BoardStore {
     }
   }
 
+  async goToWeek(startDate: string) {
+    const d = new Date(startDate + 'T00:00:00');
+    const { year, weekNumber } = isoWeek(d);
+    this.isLoading = true;
+    this.error = null;
+    try {
+      this.currentWeek = await weeksApi.getOrCreateWeek(year, weekNumber, startDate);
+      await this._loadCards();
+    } catch (e) {
+      this.error = `Failed to navigate: ${e}`;
+    } finally {
+      this.isLoading = false;
+    }
+  }
+
   async addCard(title: string, weekId: number | null, dayOfWeek: number | null, cardType: CardType = 'task') {
     const card = await cardsApi.createCard(title, cardType, weekId, dayOfWeek);
     this.cards = [...this.cards, card];
@@ -166,10 +182,34 @@ class BoardStore {
     this.cards = this.cards.filter((c) => c.id !== cardId);
   }
 
+  async duplicateCard(cardId: number) {
+    const card = await cardsApi.duplicateCard(cardId);
+    this.cards = [...this.cards, card];
+    toastStore.add('Card duplicated');
+  }
+
+  async moveToNextWeek(cardId: number) {
+    if (!this.currentWeek) return;
+    const nextMonday = new Date(this.currentWeek.start_date);
+    nextMonday.setDate(nextMonday.getDate() + 7);
+    const { year, weekNumber, startDate } = isoWeek(nextMonday);
+    const nextWeek = await weeksApi.getOrCreateWeek(year, weekNumber, startDate);
+    await cardsApi.updateCard(cardId, { weekId: nextWeek.id, dayOfWeek: 1, position: 0 });
+    this.cards = this.cards.filter((c) => c.id !== cardId);
+    toastStore.add('Moved to next week');
+  }
+
   async rollover() {
     if (!this.currentWeek) return;
-    await weeksApi.rolloverWeek(this.currentWeek.id);
+    const weekId = this.currentWeek.id;
+    const unfinishedCount = this.cards.filter(
+      (c) => c.week_id === weekId && c.status !== 'done'
+    ).length;
+    await weeksApi.rolloverWeek(weekId);
     await this._loadCards();
+    if (unfinishedCount > 0) {
+      toastStore.add(`Rolled over ${unfinishedCount} card${unfinishedCount === 1 ? '' : 's'} to backlog`);
+    }
   }
 
   private async _loadCards() {

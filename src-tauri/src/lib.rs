@@ -120,6 +120,8 @@ pub fn run() {
             create_card,
             update_card,
             delete_card,
+            duplicate_card,
+            search_cards,
             // Weeks
             get_or_create_week,
             get_week_by_date,
