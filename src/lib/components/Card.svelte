@@ -24,7 +24,17 @@
   import { Pencil, ExternalLink, Trash2, Check, Users, GitPullRequest, MessageSquare, ListTodo, Eye, FileText, X, GripVertical } from 'lucide-svelte';
   import EditCardModal from './EditCardModal.svelte';
 
-  let { card, onMarkDone }: { card: Card; onMarkDone: (id: number) => void } = $props();
+  let {
+    card,
+    onMarkDone,
+    onMoveToNextWeek,
+    onScheduleToday
+  }: {
+    card: Card;
+    onMarkDone: (id: number) => void;
+    onMoveToNextWeek?: (id: number) => void;
+    onScheduleToday?: (id: number) => void;
+  } = $props();
 
   const cardProject = $derived(
     card.project_id != null
@@ -197,6 +207,10 @@
       >{aiFields.description}</p>
     {/if}
 
+    {#if card.notes && !isTitleEditing && !isPopoverOpen}
+      <p class="text-xs text-[var(--color-muted)] leading-snug mt-1 line-clamp-2 group-hover:line-clamp-none transition-all cursor-default">{card.notes}</p>
+    {/if}
+
     <div class="mt-1.5 flex items-center gap-1.5 flex-wrap">
       <!-- Project slug badge -->
       {#if cardProject}
@@ -249,6 +263,31 @@
           aria-label="Edit card"
           title="Edit card"
         ><Pencil size={12} /></button>
+        <button
+          data-no-dnd="true"
+          onclick={() => boardStore.duplicateCard(card.id)}
+          class="text-[var(--color-muted)] hover:text-[var(--color-accent-hover)] transition-colors text-xs leading-none"
+          aria-label="Duplicate card"
+          title="Duplicate card"
+        >⧉</button>
+        {#if onMoveToNextWeek}
+          <button
+            data-no-dnd="true"
+            onclick={() => onMoveToNextWeek!(card.id)}
+            class="text-[var(--color-muted)] hover:text-[var(--color-accent-hover)] transition-colors text-xs leading-none"
+            aria-label="Move to next week"
+            title="Move to next week"
+          >»</button>
+        {/if}
+        {#if onScheduleToday}
+          <button
+            data-no-dnd="true"
+            onclick={() => onScheduleToday!(card.id)}
+            class="text-[var(--color-muted)] hover:text-[var(--color-accent-hover)] transition-colors text-xs leading-none whitespace-nowrap"
+            aria-label="Schedule for today"
+            title="Schedule for today"
+          >→ Today</button>
+        {/if}
         {#if !confirmingDelete}
           <button
             data-no-dnd="true"

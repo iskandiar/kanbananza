@@ -10,6 +10,7 @@
     backlogCards = [],
     availableHours,
     isCurrentWeek = true,
+    sidebarOpen = false,
     onPrevWeek,
     onNextWeek,
     onJumpToToday,
@@ -17,13 +18,17 @@
     onMoveCard,
     onMarkDone,
     onRollover,
-    onCardCreated
+    onToggleSidebar,
+    onCardCreated,
+    onMoveCardToNextWeek,
+    onScheduleToday
   }: {
     weekLabel: string;
     days: Array<{ label: string; date: string; dayOfWeek: number; weekId: number | null; isToday: boolean; meetings: Card[]; tasks: Card[] }>;
     backlogCards: Card[];
     availableHours: number;
     isCurrentWeek: boolean;
+    sidebarOpen?: boolean;
     onPrevWeek: () => void;
     onNextWeek: () => void;
     onJumpToToday: () => void;
@@ -31,10 +36,11 @@
     onMoveCard: (cardId: number, weekId: number | null, dayOfWeek: number | null, position: number) => void;
     onMarkDone: (cardId: number) => void;
     onRollover: () => void;
+    onToggleSidebar?: () => void;
     onCardCreated?: (card: Card) => void;
+    onMoveCardToNextWeek?: (id: number) => void;
+    onScheduleToday?: (id: number) => void;
   } = $props();
-
-  let backlogOpen = $state(false);
 
   const unfinishedCount = $derived(
     days.flatMap(d => d.tasks).filter(c => c.status === 'planned').length
@@ -60,23 +66,25 @@
           {onMoveCard}
           {onMarkDone}
           {onCardCreated}
+          onMoveToNextWeek={onMoveCardToNextWeek}
         />
       {/each}
     </div>
 
     <BacklogSidebar
       cards={backlogCards}
-      isOpen={backlogOpen}
+      isOpen={sidebarOpen}
       onAddCard={(title) => onAddCard(null, title)}
-      onClose={() => (backlogOpen = false)}
+      onClose={() => onToggleSidebar?.()}
       {onMoveCard}
       {onMarkDone}
       {onCardCreated}
+      {onScheduleToday}
     />
 
-    {#if !backlogOpen}
+    {#if !sidebarOpen}
       <button
-        onclick={() => (backlogOpen = true)}
+        onclick={() => onToggleSidebar?.()}
         class="flex-shrink-0 w-12 border-l border-[var(--color-border)] flex flex-col items-center justify-center text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface)] transition-colors gap-0.5"
         title="Open backlog"
       >

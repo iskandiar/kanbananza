@@ -5,6 +5,7 @@
   import { summariseWeek } from '$lib/api/ai';
   import { listCardsByWeek } from '$lib/api/cards';
   import { formatDateRange } from '$lib/utils';
+  import { toastStore } from '$lib/stores/toast.svelte';
 
   type WeekRow = Week & { cardCount: number; summarising: boolean };
 
@@ -36,6 +37,7 @@
     try {
       const summary = await summariseWeek(weekId);
       weeks[idx].summary = summary;
+      toastStore.add('Summary generated', 'success');
     } catch (e) {
       error = String(e);
     } finally {

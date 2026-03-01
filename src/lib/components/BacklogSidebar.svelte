@@ -21,7 +21,8 @@
     onClose,
     onMoveCard,
     onMarkDone,
-    onCardCreated
+    onCardCreated,
+    onScheduleToday
   }: {
     cards: Card[];
     isOpen: boolean;
@@ -30,6 +31,7 @@
     onMoveCard: (cardId: number, weekId: number | null, dayOfWeek: number | null, position: number) => void;
     onMarkDone: (cardId: number) => void;
     onCardCreated?: (card: Card) => void;
+    onScheduleToday?: (id: number) => void;
   } = $props();
 
   // Local mutable copy for svelte-dnd-action; initialized empty and synced via $effect
@@ -118,7 +120,7 @@
     onfinalize={handleDndFinalize}
   >
     {#each filteredCards as card (card.id)}
-      <CardComponent {card} {onMarkDone} />
+      <CardComponent {card} {onMarkDone} {onScheduleToday} />
     {/each}
   </div>
 

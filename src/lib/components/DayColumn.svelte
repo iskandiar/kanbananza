@@ -18,7 +18,8 @@
     onAddCard,
     onMoveCard,
     onMarkDone,
-    onCardCreated
+    onCardCreated,
+    onMoveToNextWeek
   }: {
     label: string;
     date: string;
@@ -32,6 +33,7 @@
     onMoveCard: (cardId: number, weekId: number | null, dayOfWeek: number | null, position: number) => void;
     onMarkDone: (cardId: number) => void;
     onCardCreated?: (card: Card) => void;
+    onMoveToNextWeek?: (id: number) => void;
   } = $props();
 
   // Include both tasks and meetings in load calculation
@@ -107,8 +109,11 @@
       onfinalize={handleDndFinalize}
     >
       {#each localPendingTasks as card (card.id)}
-        <CardComponent {card} {onMarkDone} />
+        <CardComponent {card} {onMarkDone} {onMoveToNextWeek} />
       {/each}
+      {#if isToday && localPendingTasks.length === 0 && pendingMeetings.length === 0}
+        <p class="text-xs text-[var(--color-muted)] text-center py-2">Drag from backlog or add a task ↓</p>
+      {/if}
     </div>
 
     {#if doneTasks.length + doneMeetings.length > 0}

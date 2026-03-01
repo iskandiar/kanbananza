@@ -3,6 +3,7 @@
   import { settingsStore } from '$lib/stores/settings.svelte';
   import { getSecret, storeSecret, updateSettings, backupDatabase } from '$lib/api/settings';
   import { save } from '@tauri-apps/plugin-dialog';
+  import { toastStore } from '$lib/stores/toast.svelte';
   import CalendarPanel from '$lib/components/settings/CalendarPanel.svelte';
   import GitLabPanel from '$lib/components/settings/GitLabPanel.svelte';
   import LinearPanel from '$lib/components/settings/LinearPanel.svelte';
@@ -69,6 +70,7 @@
     try {
       await backupDatabase(path);
       backupStatus = 'success';
+      toastStore.add('Database backed up', 'success');
       setTimeout(() => { backupStatus = 'idle'; }, 2000);
     } catch (e) {
       backupStatus = 'error';

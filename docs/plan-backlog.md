@@ -47,6 +47,21 @@
 
 ---
 
+## UX Audit Backlog
+
+Items identified in daily-use friction audit, deferred for future implementation.
+
+- **6 — Recurring tasks/meetings**: Add "repeat next week" checkbox on card edit; auto-creates copy in next week on rollover
+- **7 — Undo for destructive actions**: Toast with "Undo" action for delete and rollover (soft-delete approach)
+- **11 — History drilldown**: Link each week row in /history to navigate the board to that week; or expand row to show card list
+- **12 — Global search**: Cmd+K / search route to find cards across all weeks and backlog
+- **13 — Backlog debt visibility**: Color-code the backlog badge: amber at >20 cards, rose at >40
+- **14 — Hide unimplemented integrations**: Remove or grey-out GitLab/Linear/Slack/Notion cards in Settings until implemented
+- **17 — Backlog debt indicator**: Visual indicator on the backlog toggle showing age/staleness of oldest card
+- **19 — First-run onboarding**: Single welcome modal on first launch explaining the 3-step workflow
+
+---
+
 ## Done ✓
 - Jump to today button
 - Delete card (in edit form)
