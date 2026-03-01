@@ -40,3 +40,9 @@ export async function disconnectLinear(): Promise<void> {
 
 export const getCalendarAuthUrl = (): Promise<string> =>
   invoke('get_calendar_auth_url');
+
+export const restoreDatabase = (path: string): Promise<void> =>
+  invoke('restore_database', { path });
+
+export const clearAllData = (): Promise<void> =>
+  invoke('clear_all_data');

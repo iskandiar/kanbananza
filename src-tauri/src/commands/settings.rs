@@ -1,6 +1,6 @@
 use crate::db::DbState;
 use crate::types::Settings;
-use tauri::State;
+use tauri::{AppHandle, Manager, State};
 
 #[tauri::command]
 pub fn get_settings(state: State<DbState>) -> Result<Settings, String> {
@@ -61,4 +61,28 @@ pub fn backup_database(state: State<DbState>, path: String) -> Result<(), String
     let escaped = path.replace('\'', "''");
     conn.execute_batch(&format!("VACUUM INTO '{}'", escaped))
         .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn restore_database(state: State<DbState>, app: AppHandle, path: String) -> Result<(), String> {
+    let _guard = state.0.lock().map_err(|e| e.to_string())?;
+    let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    let db_path = data_dir.join("kanbananza.db");
+    std::fs::copy(&path, &db_path).map_err(|e| e.to_string())?;
+    app.restart();
+    #[allow(unreachable_code)]
+    Ok(())
+}
+
+#[tauri::command]
+pub fn clear_all_data(state: State<DbState>) -> Result<(), String> {
+    let conn = state.0.lock().map_err(|e| e.to_string())?;
+    conn.execute_batch(
+        "PRAGMA foreign_keys=OFF;
+        DELETE FROM cards;
+        DELETE FROM projects;
+        DELETE FROM weeks;
+        PRAGMA foreign_keys=ON;",
+    )
+    .map_err(|e| e.to_string())
 }

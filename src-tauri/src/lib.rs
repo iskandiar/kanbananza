@@ -163,6 +163,8 @@ pub fn run() {
             open_url,
             // Data
             backup_database,
+            restore_database,
+            clear_all_data,
         ])
         .run(tauri::generate_context!())
         .unwrap_or_else(|e| {

@@ -1,8 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { settingsStore } from '$lib/stores/settings.svelte';
-  import { getSecret, storeSecret, updateSettings, backupDatabase } from '$lib/api/settings';
-  import { save } from '@tauri-apps/plugin-dialog';
+  import { getSecret, storeSecret, updateSettings, backupDatabase, restoreDatabase, clearAllData } from '$lib/api/settings';
+  import { save, open } from '@tauri-apps/plugin-dialog';
   import { toastStore } from '$lib/stores/toast.svelte';
   import CalendarPanel from '$lib/components/settings/CalendarPanel.svelte';
   import GitLabPanel from '$lib/components/settings/GitLabPanel.svelte';
@@ -58,9 +58,18 @@
     await updateSettings({ autoAi: autoAiEnabled });
   }
 
-  // --- Backup state ---
+  // --- Backup / restore / clear state ---
   let backupStatus = $state<'idle' | 'success' | 'error'>('idle');
   let backupError = $state<string | null>(null);
+  let clearConfirming = $state(false);
+
+  async function handleRestore() {
+    const path = await open({ filters: [{ name: 'Database', extensions: ['db'] }] });
+    if (path) {
+      await restoreDatabase(path as string);
+      // app restarts automatically
+    }
+  }
 
   async function backupDb() {
     backupStatus = 'idle';
@@ -213,19 +222,59 @@
     <section class="border-t border-[var(--color-border)] mt-6 pt-6">
       <p class="text-xs uppercase tracking-wide text-[var(--color-muted)] mb-3">Data</p>
 
-      <div class="flex items-center gap-4">
-        <button
-          onclick={backupDb}
-          class="text-sm px-3 py-1.5 rounded border border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-text)] transition-colors"
-        >
-          Backup database
-        </button>
-        {#if backupStatus === 'success'}
-          <span class="text-xs text-emerald-500">Backup saved</span>
-        {/if}
-        {#if backupStatus === 'error'}
-          <span class="text-xs text-red-400">{backupError}</span>
-        {/if}
+      <div class="flex flex-col gap-4">
+        <!-- Backup row -->
+        <div class="flex items-center gap-4">
+          <button
+            onclick={backupDb}
+            class="text-sm px-3 py-1.5 rounded border border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-text)] transition-colors"
+          >
+            Backup database
+          </button>
+          {#if backupStatus === 'success'}
+            <span class="text-xs text-emerald-500">Backup saved</span>
+          {/if}
+          {#if backupStatus === 'error'}
+            <span class="text-xs text-red-400">{backupError}</span>
+          {/if}
+        </div>
+
+        <!-- Restore row -->
+        <div class="flex items-center gap-4">
+          <button
+            onclick={handleRestore}
+            class="text-sm px-3 py-1.5 rounded border border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-text)] transition-colors"
+          >
+            Restore from backup
+          </button>
+          <span class="text-xs text-[var(--color-muted)]">The app will restart after restore.</span>
+        </div>
+
+        <!-- Clear all data row -->
+        <div class="flex items-center gap-4">
+          {#if clearConfirming}
+            <span class="text-sm text-[var(--color-text-muted)]">Are you sure?</span>
+            <button
+              onclick={async () => { await clearAllData(); window.location.reload(); }}
+              class="text-sm px-3 py-1.5 rounded border border-red-500 text-red-400 hover:bg-red-500/10 transition-colors"
+            >
+              Confirm
+            </button>
+            <button
+              onclick={() => { clearConfirming = false; }}
+              class="text-sm px-3 py-1.5 rounded border border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-text)] transition-colors"
+            >
+              Cancel
+            </button>
+          {:else}
+            <button
+              onclick={() => { clearConfirming = true; }}
+              class="text-sm px-3 py-1.5 rounded border border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-red-400 hover:border-red-400 transition-colors"
+            >
+              Clear all data
+            </button>
+          {/if}
+        </div>
       </div>
     </section>
 

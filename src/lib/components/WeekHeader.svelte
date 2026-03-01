@@ -55,6 +55,21 @@
   </div>
 
   <div class="flex items-center gap-2">
+    <a
+      href="/projects"
+      class="text-xs px-2.5 py-1 rounded border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-accent)] transition-colors"
+      title="View projects"
+    >
+      Projects
+    </a>
+    <a
+      href="/history"
+      class="text-xs px-2.5 py-1 rounded border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-accent)] transition-colors"
+      title="View history"
+    >
+      History
+    </a>
+    <span class="border-l border-[var(--color-border)] h-4 self-center mx-0.5" />
     {#if isCurrentWeek}
       {#if !rolloverConfirming}
         <button
@@ -82,20 +97,6 @@
         </div>
       {/if}
     {/if}
-    <a
-      href="/projects"
-      class="text-xs px-2.5 py-1 rounded border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-accent)] transition-colors"
-      title="View projects"
-    >
-      Projects
-    </a>
-    <a
-      href="/history"
-      class="text-xs px-2.5 py-1 rounded border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-accent)] transition-colors"
-      title="View history"
-    >
-      History
-    </a>
     <div class="shortcuts-container relative">
       <button
         onclick={(e) => { e.stopPropagation(); showShortcuts = !showShortcuts; }}

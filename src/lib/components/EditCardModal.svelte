@@ -4,6 +4,7 @@
   import { projectsStore } from '$lib/stores/projects.svelte';
   import * as cardsApi from '$lib/api/cards';
   import { Users, GitPullRequest, MessageSquare, ListTodo, Eye, FileText, X } from 'lucide-svelte';
+  import { portal } from '$lib/actions/portal';
 
   let { card, onClose }: { card: Card; onClose: () => void } = $props();
 
@@ -97,6 +98,7 @@
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
+  use:portal
   class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
   onclick={handleOverlayClick}
 >
