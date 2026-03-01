@@ -69,7 +69,7 @@
 </script>
 
 <div
-  class="flex flex-col min-w-0 flex-1 border-r border-[var(--color-border)] last:border-r-0 px-3 py-3 gap-3 {isToday ? 'bg-[var(--color-surface)]/30' : ''}"
+  class="flex flex-col min-w-0 flex-1 border-r border-[var(--color-glass-border)] last:border-r-0 px-3 py-3 gap-3 backdrop-blur-[2px] {isToday ? 'bg-[var(--color-glass-bg)]' : ''}"
 >
   <div>
     <p

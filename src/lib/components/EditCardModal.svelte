@@ -100,7 +100,7 @@
   class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
   onclick={handleOverlayClick}
 >
-  <div class="bg-[var(--color-surface-raised)] border border-[var(--color-border)] rounded-lg shadow-xl p-4 w-72">
+  <div class="bg-[var(--color-glass-bg-raised)] border border-[var(--color-glass-border)] rounded-lg shadow-2xl backdrop-blur-xl p-4 w-72">
     <!-- Header -->
     <div class="flex items-center justify-between mb-3">
       <span class="text-sm font-medium text-[var(--color-text)]">Edit card</span>

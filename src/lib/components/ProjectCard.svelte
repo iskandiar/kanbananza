@@ -67,7 +67,7 @@
 </script>
 
 <div
-  class="group relative flex flex-col gap-1.5 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 hover:border-[var(--color-accent)]/40 hover:bg-[var(--color-surface-raised)] transition-colors cursor-grab active:cursor-grabbing"
+  class="group relative flex flex-col gap-1.5 rounded-md border border-[var(--color-glass-border)] bg-[var(--color-glass-bg)] px-3 py-2 hover:border-[var(--color-accent)]/40 hover:bg-[var(--color-glass-bg-raised)] transition-colors cursor-grab active:cursor-grabbing glass-card backdrop-blur-sm"
   class:opacity-50={card.status === 'done'}
   role="article"
 >

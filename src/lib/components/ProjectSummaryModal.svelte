@@ -46,7 +46,7 @@
   onclick={handleOverlayClick}
 >
   <div
-    class="bg-[var(--color-surface-raised)] border border-[var(--color-border)] rounded-lg shadow-xl p-4 w-[32rem] max-h-[80vh] flex flex-col"
+    class="bg-[var(--color-glass-bg-raised)] border border-[var(--color-glass-border)] rounded-lg shadow-2xl backdrop-blur-xl p-4 w-[32rem] max-h-[80vh] flex flex-col"
   >
     <div class="flex items-center justify-between mb-3 flex-shrink-0">
       <div class="flex items-center gap-2">

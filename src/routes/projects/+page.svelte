@@ -22,9 +22,9 @@
   }
 </script>
 
-<div class="flex flex-col h-full bg-[var(--color-background)]">
+<div class="flex flex-col h-full">
   <!-- Header -->
-  <div class="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border)]">
+  <div class="flex items-center justify-between px-4 py-3 border-b border-[var(--color-glass-border)] bg-[var(--color-glass-header)] backdrop-blur-md">
     <div class="flex items-center gap-3">
       <a
         href="/board"
@@ -39,7 +39,7 @@
   </div>
 
   <!-- Project list -->
-  <div class="flex-1 overflow-y-auto divide-y divide-[var(--color-border)]">
+  <div class="flex-1 overflow-y-auto divide-y divide-[var(--color-glass-border)]">
     {#each projectsStore.projects as project (project.id)}
       <ProjectAccordionRow
         {project}

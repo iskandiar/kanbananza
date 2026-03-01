@@ -41,7 +41,7 @@
   );
 </script>
 
-<div class="flex flex-col h-screen bg-[var(--color-background)] text-[var(--color-text)]">
+<div class="flex flex-col h-screen text-[var(--color-text)]">
   <WeekHeader {weekLabel} onPrev={onPrevWeek} onNext={onNextWeek} {isCurrentWeek} {onJumpToToday} {onRollover} {unfinishedCount} />
 
   <div class="flex flex-1 min-h-0">

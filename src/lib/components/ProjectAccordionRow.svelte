@@ -127,7 +127,7 @@
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
-  class="flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-[var(--color-surface)]/40 transition-colors select-none"
+  class="flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-[var(--color-glass-bg)] transition-colors select-none"
   onclick={handleRowClick}
 >
   <span class="text-[var(--color-muted)] text-xs w-3 shrink-0">{isExpanded ? '▾' : '▸'}</span>
@@ -173,15 +173,15 @@
 
 <!-- Expanded kanban -->
 {#if isExpanded}
-  <div class="border-t border-[var(--color-border)]/50">
+  <div class="border-t border-[var(--color-glass-border)]">
     {#if !projectsStore.cardsLoadedFor(project.id)}
       <div class="flex items-center justify-center h-24">
         <span class="text-xs text-[var(--color-muted)] animate-pulse">Loading…</span>
       </div>
     {:else}
-      <div class="flex overflow-hidden" style="min-height: 10rem;">
+      <div class="flex overflow-hidden backdrop-blur-[2px]" style="min-height: 10rem;">
         <!-- Backlog column -->
-        <div class="flex flex-col flex-1 border-r border-[var(--color-border)] px-4 py-3 gap-2">
+        <div class="flex flex-col flex-1 border-r border-[var(--color-glass-border)] px-4 py-3 gap-2">
           <p class="text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wide">
             Backlog ({localBacklog.length})
           </p>
@@ -223,7 +223,7 @@
         </div>
 
         <!-- In Progress column -->
-        <div class="flex flex-col flex-1 border-r border-[var(--color-border)] px-4 py-3 gap-2">
+        <div class="flex flex-col flex-1 border-r border-[var(--color-glass-border)] px-4 py-3 gap-2">
           <p class="text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wide">
             In Progress ({localInProgress.length})
           </p>

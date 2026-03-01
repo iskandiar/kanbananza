@@ -14,7 +14,7 @@
   let rolloverConfirming = $state(false);
 </script>
 
-<header class="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border)]">
+<header class="flex items-center justify-between px-4 py-3 border-b border-[var(--color-glass-border)] bg-[var(--color-glass-header)] backdrop-blur-md">
   <div class="flex items-center gap-1">
     <button
       onclick={onPrev}

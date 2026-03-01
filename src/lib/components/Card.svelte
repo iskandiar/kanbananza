@@ -142,7 +142,7 @@
 </script>
 
 <div
-  class="group relative flex flex-row gap-2 items-start rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 hover:border-[var(--color-accent)]/40 hover:bg-[var(--color-surface-raised)] transition-colors"
+  class="glass-card group relative flex flex-row gap-2 items-start rounded-md border border-[var(--color-glass-border)] bg-[var(--color-glass-bg)] px-3 py-2 hover:border-[var(--color-accent)]/40 hover:bg-[var(--color-glass-bg-raised)] backdrop-blur-sm transition-colors"
   class:cursor-grab={!isTitleEditing && !isPopoverOpen}
   class:active:cursor-grabbing={!isTitleEditing && !isPopoverOpen}
   class:cursor-default={isTitleEditing || isPopoverOpen}

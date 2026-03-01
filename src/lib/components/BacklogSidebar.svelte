@@ -71,12 +71,12 @@
 </script>
 
 <aside
-  class="flex-shrink-0 flex flex-col bg-[var(--color-background)] overflow-hidden transition-[width] duration-200"
+  class="flex-shrink-0 flex flex-col bg-[var(--color-glass-header)] backdrop-blur-md overflow-hidden transition-[width] duration-200"
   class:border-l={isOpen}
-  class:border-[var(--color-border)]={isOpen}
+  class:border-[var(--color-glass-border)]={isOpen}
   style:width={isOpen ? '18rem' : '0'}
 >
-  <div class="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border)]">
+  <div class="flex items-center justify-between px-4 py-3 border-b border-[var(--color-glass-border)]">
     <span class="text-sm font-medium text-[var(--color-text)]">Backlog ({cards.length})</span>
     <button
       onclick={onClose}
@@ -86,9 +86,9 @@
   </div>
 
   {#if isOpen}
-    <div class="px-3 py-2 border-b border-[var(--color-border)]">
+    <div class="px-3 py-2 border-b border-[var(--color-glass-border)]">
       <input type="text" bind:value={searchQuery} placeholder="Search backlog…"
-        class="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded px-2 py-1.5 text-xs text-[var(--color-text)] placeholder-[var(--color-muted)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]" />
+        class="w-full bg-[var(--color-surface)] border border-[var(--color-glass-border)] rounded px-2 py-1.5 text-xs text-[var(--color-text)] placeholder-[var(--color-muted)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]" />
     </div>
   {/if}
 
@@ -123,7 +123,7 @@
   </div>
 
   {#if isOpen}
-    <div class="px-3 py-2 border-t border-[var(--color-border)]">
+    <div class="px-3 py-2 border-t border-[var(--color-glass-border)]">
       <QuickAdd onAdd={onAddCard} weekId={null} dayOfWeek={null} {onCardCreated} />
     </div>
   {/if}

@@ -26,33 +26,76 @@
   --color-impact-low-bg: rgba(75, 127, 204, 0.12);
   --color-done: #4A9B6F;
   --color-done-bg: rgba(74, 155, 111, 0.12);
+
+  /* Glass */
+  --color-glass-bg: rgba(18, 22, 32, 0.48);
+  --color-glass-bg-raised: rgba(24, 30, 46, 0.60);
+  --color-glass-border: rgba(255, 255, 255, 0.09);
+  --color-glass-header: rgba(10, 12, 18, 0.72);
+  --color-glass-highlight: rgba(255, 255, 255, 0.055);
 }
 
-/* Light theme — applied when <html class="light"> */
+/* Light theme — warm studio glass. Applied when <html class="light"> */
 :root.light {
-  --color-background: #FFFFFF;
-  --color-surface: #F4F5F7;
-  --color-surface-raised: #ECEEF2;
-  --color-border: #DDE0E8;
-  --color-text: #0D0F14;
-  --color-text-muted: #5A5F72;
-  --color-muted: #9DA2B0;
+  --color-background: #F9F7F3;
+  --color-surface: #F0EDE6;
+  --color-surface-raised: #E6E2D8;
+  --color-border: #CEC8BB;
+  --color-text: #1A1714;
+  --color-text-muted: #655F54;
+  --color-muted: #9E9488;
   --color-accent: #3D7EFF;
   --color-accent-hover: #2B6AEE;
 
-  /* Impact — same values, work on light backgrounds */
-  --color-impact-high: #E05252;
-  --color-impact-high-bg: rgba(224, 82, 82, 0.12);
-  --color-impact-mid: #D4853A;
-  --color-impact-mid-bg: rgba(212, 133, 58, 0.12);
+  /* Impact */
+  --color-impact-high: #D44E4E;
+  --color-impact-high-bg: rgba(212, 78, 78, 0.11);
+  --color-impact-mid: #C47830;
+  --color-impact-mid-bg: rgba(196, 120, 48, 0.11);
   --color-impact-low: #4B7FCC;
-  --color-impact-low-bg: rgba(75, 127, 204, 0.12);
+  --color-impact-low-bg: rgba(75, 127, 204, 0.11);
   --color-done: #4A9B6F;
-  --color-done-bg: rgba(74, 155, 111, 0.12);
+  --color-done-bg: rgba(74, 155, 111, 0.11);
+
+  /* Glass — warm frosted cream */
+  --color-glass-bg: rgba(255, 253, 249, 0.56);
+  --color-glass-bg-raised: rgba(255, 254, 252, 0.74);
+  --color-glass-border: rgba(150, 120, 80, 0.13);
+  --color-glass-header: rgba(252, 250, 245, 0.84);
+  --color-glass-highlight: rgba(255, 250, 240, 0.50);
 }
 
 body {
   background-color: var(--color-background);
+  background-image:
+    radial-gradient(ellipse 90% 70% at 15% 5%, rgba(50, 70, 200, 0.26) 0%, transparent 62%),
+    radial-gradient(ellipse 65% 55% at 85% 88%, rgba(110, 40, 160, 0.20) 0%, transparent 55%),
+    radial-gradient(ellipse 40% 40% at 68% 28%, rgba(20, 90, 180, 0.10) 0%, transparent 50%);
   color: var(--color-text);
   font-family: var(--font-sans);
+}
+
+:root.light body {
+  background-image:
+    radial-gradient(ellipse 80% 65% at 15% 8%, rgba(210, 165, 75, 0.20) 0%, transparent 62%),
+    radial-gradient(ellipse 60% 55% at 82% 82%, rgba(195, 95, 125, 0.15) 0%, transparent 55%),
+    radial-gradient(ellipse 45% 40% at 55% 22%, rgba(120, 160, 230, 0.08) 0%, transparent 50%);
+}
+
+.glass-card {
+  position: relative;
+}
+
+.glass-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+    135deg,
+    var(--color-glass-highlight) 0%,
+    rgba(255, 255, 255, 0.01) 35%,
+    transparent 55%
+  );
+  pointer-events: none;
 }
