@@ -34,6 +34,13 @@
 - **Projects view** ⭐ _Important_ — introduce a Projects concept: group cards by project/initiative; dedicated Projects page with full Kanban board (columns by status: To Do / In Progress / Done); cards can belong to a project and appear in both week view and project board
 - **Responsive view** — adapt layout for smaller windows / tablet form factors
 
+### Accessibility & Keyboard
+- **Keyboard shortcuts** — implement keyboard shortcuts for common actions (e.g., create card, delete card, navigate weeks, focus search); customizable via `/keybindings`
+- **Screen reader support** — ensure proper ARIA labels, semantic HTML, and screen reader compatibility
+- **Tab navigation** — ensure logical tab order throughout the app for keyboard navigation
+- **Focus indicators** — improve visual focus indicators for keyboard navigation
+- **Color contrast** — review and improve color contrast ratios to meet WCAG AA standards
+
 ### Settings & Reliability
 - **Key setup instructions** — inline guidance in Settings explaining where to get each API key / token (Anthropic, OpenAI, GitLab PAT, etc.) with links to the relevant pages
 - **Key validation** — verify on save (and periodically) whether a stored API key / token is still valid, and surface a warning if it has been revoked or expired
