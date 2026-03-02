@@ -8,6 +8,9 @@ pub struct GCalEvent {
     pub description: Option<String>,
     pub start: GCalTime,
     pub end: GCalTime,
+    #[serde(rename = "eventType", default)]
+    pub event_type: Option<String>,
+    pub attendees: Option<Vec<GCalAttendee>>,
 }
 
 /// The `start` or `end` field of a Google Calendar event.
@@ -19,6 +22,14 @@ pub struct GCalTime {
     pub date_time: Option<String>,
     /// "YYYY-MM-DD" string — present only for all-day events.
     pub date: Option<String>,
+}
+
+#[derive(Deserialize)]
+pub struct GCalAttendee {
+    #[serde(rename = "self", default)]
+    pub is_self: Option<bool>,
+    #[serde(rename = "responseStatus", default)]
+    pub response_status: Option<String>,
 }
 
 /// Wraps the `items` array in a Google Calendar list-events response.
@@ -126,11 +137,31 @@ pub async fn fetch_events(
         .await
         .map_err(|e| format!("failed to parse calendar response for '{calendar_id}': {e}"))?;
 
-    // Only return timed events (skip all-day events which have no dateTime).
     let timed: Vec<GCalEvent> = body
         .items
         .into_iter()
+        // Only timed events (all-day have no dateTime)
         .filter(|e| e.start.date_time.is_some())
+        // Skip non-default event types (focus time, OOO, working location)
+        .filter(|e| {
+            e.event_type.as_deref().map_or(true, |t| t == "default" || t == "fromGmail")
+        })
+        // Skip if user declined or hasn't responded (only when attendees list is present)
+        .filter(|e| {
+            let Some(attendees) = &e.attendees else { return true }; // solo event, keep
+            if attendees.is_empty() { return true; }
+            attendees.iter().any(|a| {
+                a.is_self == Some(true)
+                    && a.response_status.as_deref() == Some("accepted")
+            })
+        })
+        // Skip by title keyword (case-insensitive)
+        .filter(|e| {
+            let title = e.summary.as_deref().unwrap_or("").to_lowercase();
+            !["focus time", "out of office", "ooo", "lunch"]
+                .iter()
+                .any(|kw| title.contains(kw))
+        })
         .collect();
 
     Ok(timed)
