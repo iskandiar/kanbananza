@@ -42,6 +42,7 @@ pub(crate) fn db_create_card(
     week_id: Option<i64>,
     day_of_week: Option<i64>,
     project_id: Option<i64>,
+    url: Option<String>,
 ) -> Result<Card, String> {
     let position: i64 = db
         .query_row(
@@ -56,8 +57,8 @@ pub(crate) fn db_create_card(
         .unwrap_or("task")
         .to_string();
     db.execute(
-        "INSERT INTO cards (title,card_type,week_id,day_of_week,position,project_id) VALUES (?,?,?,?,?,?)",
-        rusqlite::params![title, card_type_str, week_id, day_of_week, position, project_id],
+        "INSERT INTO cards (title,card_type,week_id,day_of_week,position,project_id,url) VALUES (?,?,?,?,?,?,?)",
+        rusqlite::params![title, card_type_str, week_id, day_of_week, position, project_id, url],
     )
     .map_err(|e| e.to_string())?;
     let id = db.last_insert_rowid();
@@ -213,11 +214,12 @@ pub async fn create_card(
     week_id: Option<i64>,
     day_of_week: Option<i64>,
     project_id: Option<i64>,
+    url: Option<String>,
     state: State<'_, DbState>,
 ) -> Result<Card, String> {
     let (card_id, card) = {
         let db = state.0.lock().map_err(|e| e.to_string())?;
-        let card = db_create_card(&db, &title, &card_type, week_id, day_of_week, project_id)?;
+        let card = db_create_card(&db, &title, &card_type, week_id, day_of_week, project_id, url)?;
         (card.id, card)
     }; // DB lock released
 
@@ -309,7 +311,7 @@ mod tests {
             .query_row("SELECT id FROM weeks WHERE year=2026 AND week_number=9", [], |r| r.get(0))
             .unwrap();
 
-        let card = db_create_card(&db, "Test card", &CardType::Task, Some(week_id), Some(1), None)
+        let card = db_create_card(&db, "Test card", &CardType::Task, Some(week_id), Some(1), None, None)
             .unwrap();
 
         assert_eq!(card.title, "Test card");
@@ -325,7 +327,7 @@ mod tests {
     #[test]
     fn update_status_and_title_persists() {
         let db = open_test_db();
-        let card = db_create_card(&db, "Original", &CardType::Task, None, None, None).unwrap();
+        let card = db_create_card(&db, "Original", &CardType::Task, None, None, None, None).unwrap();
 
         let updated = db_update_card(
             &db,
@@ -370,7 +372,7 @@ mod tests {
             .unwrap();
 
         let card =
-            db_create_card(&db, "Placed card", &CardType::Task, Some(week_id), Some(2), None).unwrap();
+            db_create_card(&db, "Placed card", &CardType::Task, Some(week_id), Some(2), None, None).unwrap();
         assert_eq!(card.week_id, Some(week_id));
 
         let moved = db_update_card(
@@ -396,7 +398,7 @@ mod tests {
     #[test]
     fn delete_card_removes_from_list() {
         let db = open_test_db();
-        let card = db_create_card(&db, "To delete", &CardType::Task, None, None, None).unwrap();
+        let card = db_create_card(&db, "To delete", &CardType::Task, None, None, None, None).unwrap();
 
         db_delete_card(&db, card.id).unwrap();
 
@@ -418,9 +420,9 @@ mod tests {
             .query_row("SELECT id FROM weeks WHERE year=2026 AND week_number=9", [], |r| r.get(0))
             .unwrap();
 
-        let c1 = db_create_card(&db, "First",  &CardType::Task, Some(week_id), Some(3), None).unwrap();
-        let c2 = db_create_card(&db, "Second", &CardType::Task, Some(week_id), Some(3), None).unwrap();
-        let c3 = db_create_card(&db, "Third",  &CardType::Task, Some(week_id), Some(3), None).unwrap();
+        let c1 = db_create_card(&db, "First",  &CardType::Task, Some(week_id), Some(3), None, None).unwrap();
+        let c2 = db_create_card(&db, "Second", &CardType::Task, Some(week_id), Some(3), None, None).unwrap();
+        let c3 = db_create_card(&db, "Third",  &CardType::Task, Some(week_id), Some(3), None, None).unwrap();
 
         assert_eq!(c1.position, 1, "first card position must be 1");
         assert_eq!(c2.position, 2, "second card position must be 2");
@@ -441,7 +443,7 @@ mod tests {
             .query_row("SELECT id FROM weeks WHERE year=2026 AND week_number=9", [], |r| r.get(0))
             .unwrap();
 
-        let src = db_create_card(&db, "Original", &CardType::Task, Some(week_id), Some(1), None)
+        let src = db_create_card(&db, "Original", &CardType::Task, Some(week_id), Some(1), None, None)
             .unwrap();
         assert_eq!(src.position, 1);
 
@@ -461,9 +463,9 @@ mod tests {
     #[test]
     fn search_cards_matches_title_substring() {
         let db = open_test_db();
-        db_create_card(&db, "Fix login bug", &CardType::Task, None, None, None).unwrap();
-        db_create_card(&db, "Write documentation", &CardType::Task, None, None, None).unwrap();
-        db_create_card(&db, "Fix signup bug", &CardType::Task, None, None, None).unwrap();
+        db_create_card(&db, "Fix login bug", &CardType::Task, None, None, None, None).unwrap();
+        db_create_card(&db, "Write documentation", &CardType::Task, None, None, None, None).unwrap();
+        db_create_card(&db, "Fix signup bug", &CardType::Task, None, None, None, None).unwrap();
 
         let results = db_search_cards(&db, "Fix").unwrap();
         assert_eq!(results.len(), 2, "should return both 'Fix' cards");
@@ -477,7 +479,7 @@ mod tests {
     #[test]
     fn search_cards_no_match_returns_empty() {
         let db = open_test_db();
-        db_create_card(&db, "Refactor auth", &CardType::Task, None, None, None).unwrap();
+        db_create_card(&db, "Refactor auth", &CardType::Task, None, None, None, None).unwrap();
 
         let results = db_search_cards(&db, "nonexistent").unwrap();
         assert!(results.is_empty(), "no results expected for unmatched query");
@@ -491,7 +493,7 @@ mod tests {
         let pid: i64 = db
             .query_row("SELECT id FROM projects WHERE slug='P1'", [], |r| r.get(0))
             .unwrap();
-        let card = db_create_card(&db, "card", &CardType::Task, None, None, Some(pid)).unwrap();
+        let card = db_create_card(&db, "card", &CardType::Task, None, None, Some(pid), None).unwrap();
         assert_eq!(card.project_id, Some(pid));
 
         let updated = db_update_card(
@@ -511,7 +513,7 @@ mod tests {
     #[test]
     fn update_card_type_persists() {
         let db = open_test_db();
-        let card = db_create_card(&db, "My task", &CardType::Task, None, None, None).unwrap();
+        let card = db_create_card(&db, "My task", &CardType::Task, None, None, None, None).unwrap();
         assert_eq!(card.card_type, CardType::Task);
 
         let meeting_str = serde_json::to_value(&CardType::Meeting)

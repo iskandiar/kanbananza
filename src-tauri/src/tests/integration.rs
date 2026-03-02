@@ -33,7 +33,7 @@ mod tests {
 
         // Step 2: create a planned card in that week.
         let card =
-            db_create_card(&db, "Ship feature", &CardType::Task, Some(week.id), Some(1), None).unwrap();
+            db_create_card(&db, "Ship feature", &CardType::Task, Some(week.id), Some(1), None, None).unwrap();
         assert_eq!(card.week_id, Some(week.id));
 
         // Verify the card appears in that week's list.
@@ -67,9 +67,9 @@ mod tests {
         let week = db_get_or_create_week(&db, 2026, 9, "2026-02-23").unwrap();
 
         // Three cards inserted for the same day must get positions 1, 2, 3.
-        let c1 = db_create_card(&db, "Alpha", &CardType::Task, Some(week.id), Some(1), None).unwrap();
-        let c2 = db_create_card(&db, "Beta",  &CardType::Task, Some(week.id), Some(1), None).unwrap();
-        let c3 = db_create_card(&db, "Gamma", &CardType::Task, Some(week.id), Some(1), None).unwrap();
+        let c1 = db_create_card(&db, "Alpha", &CardType::Task, Some(week.id), Some(1), None, None).unwrap();
+        let c2 = db_create_card(&db, "Beta",  &CardType::Task, Some(week.id), Some(1), None, None).unwrap();
+        let c3 = db_create_card(&db, "Gamma", &CardType::Task, Some(week.id), Some(1), None, None).unwrap();
 
         assert_eq!(c1.position, 1);
         assert_eq!(c2.position, 2);

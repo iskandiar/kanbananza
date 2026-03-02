@@ -65,9 +65,9 @@ mod tests {
 
         // Create one planned card and one done card in the week.
         let planned =
-            db_create_card(&db, "Planned task", &CardType::Task, Some(week.id), Some(1), None).unwrap();
+            db_create_card(&db, "Planned task", &CardType::Task, Some(week.id), Some(1), None, None).unwrap();
         let done_card =
-            db_create_card(&db, "Done task", &CardType::Task, Some(week.id), Some(1), None).unwrap();
+            db_create_card(&db, "Done task", &CardType::Task, Some(week.id), Some(1), None, None).unwrap();
 
         // Mark the second card as done directly in the DB.
         db.execute(

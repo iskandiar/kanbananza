@@ -9,8 +9,9 @@ export const createCard = (
   cardType: CardType,
   weekId: number | null,
   dayOfWeek: number | null,
-  projectId?: number
-): Promise<Card> => invoke('create_card', { title, cardType, weekId, dayOfWeek, projectId });
+  projectId?: number,
+  url?: string
+): Promise<Card> => invoke('create_card', { title, cardType, weekId, dayOfWeek, projectId, url });
 
 export const updateCard = (
   id: number,

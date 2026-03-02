@@ -1,6 +1,7 @@
 <script lang="ts">
-  import type { Card } from '$lib/types';
-  import { createCardFromUrl } from '$lib/api/cards';
+  import type { Card, CardType } from '$lib/types';
+  import { createCard, createCardFromUrl } from '$lib/api/cards';
+  import EditCardModal from '$lib/components/EditCardModal.svelte';
 
   let {
     weekId = null,
@@ -18,7 +19,9 @@
   let value = $state('');
   let isLoading = $state(false);
   let error = $state<string | null>(null);
+  let pendingEditCard = $state<Card | null>(null);
 
+  const IS_URL = /^https?:\/\//;
   const LINEAR_URL = /https:\/\/linear\.app\/[^/]+\/issue\/([A-Z]+-\d+)/;
   const NOTION_URL = /https?:\/\/(www\.)?notion\.(so|com)\/.*([a-f0-9]{32})/;
   const SLACK_URL = /https?:\/\/[^.]+\.slack\.com\/archives\/[A-Z0-9]+\/p\d+/;
@@ -29,6 +32,17 @@
     : SLACK_URL.test(value) ? 'Slack thread'
     : null
   );
+
+  function inferTypeFromUrl(url: string): CardType {
+    try {
+      const host = new URL(url).hostname;
+      if (host.endsWith('.slack.com')) return 'thread';
+      if (host === 'linear.app') return 'task';
+      if (host === 'notion.so' || host === 'notion.com') return 'documentation';
+      if (host === 'github.com' || host === 'gitlab.com' || host.includes('.gitlab.')) return 'mr';
+    } catch {}
+    return 'task';
+  }
 
   async function submit() {
     const trimmed = value.trim();
@@ -42,6 +56,29 @@
         value = '';
         active = false;
         onCardCreated?.(card);
+      } catch {
+        // Known URL format but sync failed — fall back to generic card + edit modal
+        try {
+          const card = await createCard(trimmed, inferTypeFromUrl(trimmed), weekId, dayOfWeek, undefined, trimmed);
+          value = '';
+          active = false;
+          onCardCreated?.(card);
+          pendingEditCard = card;
+        } catch (e2) {
+          error = String(e2);
+        }
+      } finally {
+        isLoading = false;
+      }
+    } else if (IS_URL.test(trimmed)) {
+      isLoading = true;
+      error = null;
+      try {
+        const card = await createCard(trimmed, inferTypeFromUrl(trimmed), weekId, dayOfWeek, undefined, trimmed);
+        value = '';
+        active = false;
+        onCardCreated?.(card);
+        pendingEditCard = card;
       } catch (e) {
         error = String(e);
       } finally {
@@ -90,6 +127,10 @@
   >
     + Add card...
   </button>
+{/if}
+
+{#if pendingEditCard}
+  <EditCardModal card={pendingEditCard} onClose={() => (pendingEditCard = null)} />
 {/if}
 
 <script module lang="ts">
