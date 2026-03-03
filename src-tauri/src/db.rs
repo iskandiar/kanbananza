@@ -90,7 +90,7 @@ pub fn db_archive_project(conn: &Connection, id: i64) -> Result<(), String> {
 
 pub fn db_list_cards_by_project(conn: &Connection, project_id: i64) -> Result<Vec<Card>, String> {
     let select = "SELECT id,title,card_type,status,impact,time_estimate,url,week_id,day_of_week,position,source,external_id,notes,metadata,created_at,updated_at,project_id,done_at FROM cards";
-    let mut stmt = conn.prepare(&format!("{select} WHERE project_id=? ORDER BY status,position"))
+    let mut stmt = conn.prepare(&format!("{select} WHERE project_id=? AND deleted_at IS NULL ORDER BY status,position"))
         .map_err(|e| e.to_string())?;
     stmt.query_map([project_id], row_to_card)
         .map_err(|e| e.to_string())?

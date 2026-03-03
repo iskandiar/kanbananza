@@ -109,6 +109,31 @@ pub async fn fetch_review_mrs(pat: &str, user_id: i64) -> Result<Vec<GitLabMR>, 
         .map_err(|e| format!("failed to parse GitLab review MRs response: {e}"))
 }
 
+/// Fetches a single MR by encoded project path and MR iid.
+///
+/// `project_path` is URL-encoded (e.g. `"group%2Fproject"`).
+/// Returns `Err` on non-2xx or parse failure.
+pub async fn fetch_mr_by_path(pat: &str, project_path: &str, iid: i64) -> Result<GitLabMR, String> {
+    let client = reqwest::Client::new();
+
+    let resp = client
+        .get(format!("{BASE}/projects/{project_path}/merge_requests/{iid}"))
+        .header("PRIVATE-TOKEN", pat)
+        .send()
+        .await
+        .map_err(|e| format!("GitLab MR fetch failed: {e}"))?;
+
+    let status = resp.status();
+    if !status.is_success() {
+        let body = resp.text().await.unwrap_or_default();
+        return Err(format!("GitLab API error {status}: {body}"));
+    }
+
+    resp.json::<GitLabMR>()
+        .await
+        .map_err(|e| format!("failed to parse GitLab MR response: {e}"))
+}
+
 /// Fetches the total lines changed (additions + deletions) for a single MR
 /// by parsing the unified diff from `GET /projects/:id/merge_requests/:iid/diffs`.
 ///

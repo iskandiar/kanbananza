@@ -6,4 +6,6 @@ pub mod projects;
 pub mod rollover;
 pub mod settings;
 pub mod shell;
+pub mod sync_review;
+pub mod time_entries;
 pub mod weeks;

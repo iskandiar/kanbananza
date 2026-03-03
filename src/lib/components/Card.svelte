@@ -21,6 +21,7 @@
   import { boardStore } from '$lib/stores/board.svelte';
   import { projectsStore } from '$lib/stores/projects.svelte';
   import { openUrl } from '$lib/api/shell';
+  import { hoursToHHMM } from '$lib/utils';
   import { Pencil, ExternalLink, Trash2, Check, Users, GitPullRequest, MessageSquare, ListTodo, Eye, FileText, X, GripVertical } from 'lucide-svelte';
   import EditCardModal from './EditCardModal.svelte';
 
@@ -152,7 +153,9 @@
 </script>
 
 <div
-  class="glass-card group relative flex flex-row gap-2 items-start rounded-md border border-[var(--color-glass-border)] bg-[var(--color-glass-bg)] px-3 py-2 hover:border-[var(--color-accent)]/40 hover:bg-[var(--color-glass-bg-raised)] backdrop-blur-sm transition-colors"
+  class="glass-card group relative flex flex-row gap-2 items-start rounded-md border border-[var(--color-glass-border)] bg-[var(--color-glass-bg)] px-3 hover:border-[var(--color-accent)]/40 hover:bg-[var(--color-glass-bg-raised)] backdrop-blur-sm transition-colors"
+  class:py-2={card.card_type !== 'meeting'}
+  class:py-1={card.card_type === 'meeting'}
   class:cursor-grab={!isTitleEditing && !isPopoverOpen}
   class:active:cursor-grabbing={!isTitleEditing && !isPopoverOpen}
   class:cursor-default={isTitleEditing || isPopoverOpen}
@@ -199,7 +202,7 @@
       >{card.title}</p>
     {/if}
 
-    {#if aiFields.description && !isTitleEditing && !isPopoverOpen}
+    {#if aiFields.description && card.card_type !== 'meeting' && !isTitleEditing && !isPopoverOpen}
       <p
         data-no-dnd="true"
         class="text-xs text-[var(--color-text-muted)] leading-snug mt-1 line-clamp-2 group-hover:line-clamp-none transition-all cursor-default"
@@ -207,7 +210,7 @@
       >{aiFields.description}</p>
     {/if}
 
-    {#if card.notes && !isTitleEditing && !isPopoverOpen}
+    {#if card.notes && card.card_type !== 'meeting' && !isTitleEditing && !isPopoverOpen}
       <p class="text-xs text-[var(--color-text-muted)] leading-snug mt-1 line-clamp-2 group-hover:line-clamp-none transition-all cursor-default">{card.notes}</p>
     {/if}
 
@@ -241,7 +244,12 @@
 
       <!-- Time estimate -->
       {#if card.time_estimate}
-        <span class="text-xs text-[var(--color-muted)]">{card.time_estimate}h</span>
+        <span class="text-xs text-[var(--color-muted)]">{hoursToHHMM(card.time_estimate)}</span>
+      {/if}
+
+      <!-- Note indicator -->
+      {#if card.notes}
+        <span class="text-xs text-[var(--color-muted)]" title="Has notes">•</span>
       {/if}
     </div>
 

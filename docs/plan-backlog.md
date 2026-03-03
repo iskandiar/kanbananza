@@ -62,6 +62,23 @@ Items identified in daily-use friction audit, deferred for future implementation
 
 ---
 
+---
+
+## Added 2026-03-02 (Feedback triage)
+
+### P1 (High priority)
+- **Clicking card body triggers title edit** — card body click shouldn't trigger title edit mode; description should expand on click, not hover
+- **AI should not regenerate if manually set** — add `ai_locked` flag in metadata; if set, skip AI evaluation for that card
+- **Edit card modal missing title field** — add title text input to EditCardModal.svelte
+- **Actual time field** — add "actual time" field to cards (links to clock in/out feature)
+- **Revisit adding flow** — AI-refined free-text input modal: type anything, AI extracts structured fields (title, estimate, priority, type)
+
+### P2 (Medium priority)
+- **Actions UX (card jump on action)** — revisit position of action buttons so clicking them doesn't cause scroll jump
+- **Timeline day view** — more calendar-like day view as an alternative to kanban columns
+
+---
+
 ## Done ✓
 - Jump to today button
 - Delete card (in edit form)

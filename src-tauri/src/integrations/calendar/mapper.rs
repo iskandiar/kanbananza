@@ -155,16 +155,20 @@ fn upsert_event(event: &GCalEvent, db: &Connection) -> Result<Option<i64>, Strin
         if mins > 0 { Some(mins as f64 / 60.0) } else { None }
     });
 
-    let existing: Option<(i64, Option<String>)> = db
+    let existing: Option<(i64, Option<String>, Option<String>)> = db
         .query_row(
-            "SELECT id, metadata FROM cards WHERE external_id = ? AND source = 'calendar'",
+            "SELECT id, metadata, deleted_at FROM cards WHERE external_id = ? AND source = 'calendar'",
             rusqlite::params![event.id],
-            |r| Ok((r.get(0)?, r.get(1)?)),
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
         )
         .optional()
         .map_err(|e| e.to_string())?;
 
-    if let Some((card_id, existing_meta_str)) = existing {
+    if let Some((card_id, existing_meta_str, deleted_at)) = existing {
+        // Card was user-deleted — don't re-create or update it
+        if deleted_at.is_some() {
+            return Ok(None);
+        }
         // Build updated metadata, then layer in any ai_* fields from the
         // existing row so that AI-generated content survives re-syncs.
         let mut new_meta = serde_json::json!({

@@ -1,10 +1,14 @@
 <script lang="ts">
-  import type { Card } from '$lib/types';
+  import { onMount, onDestroy } from 'svelte';
+  import type { Card, TimeEntry } from '$lib/types';
   import { sumHours } from '$lib/utils';
   import { dndzone } from 'svelte-dnd-action';
   import CardComponent from './Card.svelte';
   import LoadIndicator from './LoadIndicator.svelte';
   import QuickAdd from './QuickAdd.svelte';
+  import * as timeApi from '$lib/api/time_entries';
+
+  type DndCard = Card & { dragDisabled?: boolean };
 
   let {
     label,
@@ -44,74 +48,231 @@
     sumHours([...tasks.filter(t => t.status !== 'done'), ...meetings.filter(m => m.status !== 'done')])
   );
 
-  // Pending tasks for DnD zone — initialized empty; kept mutable for svelte-dnd-action
-  // The $effect syncs updates, preventing stale cached state when parent re-renders.
-  let localPendingTasks = $state<Card[]>([]);
-  $effect(() => { localPendingTasks = tasks.filter(t => t.status !== 'done'); });
+  // Merged pending items for DnD: tasks (draggable) + meetings (non-draggable), sorted by position
+  let localPendingItems = $state<DndCard[]>([]);
+  $effect(() => {
+    const pendingT = tasks.filter(t => t.status !== 'done');
+    const pendingM = meetings.filter(m => m.status !== 'done').map(m => ({ ...m, dragDisabled: true }));
+    localPendingItems = [...pendingT, ...pendingM].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+  });
 
-  // Done and pending tasks/meetings for collapsed section
+  // Done tasks/meetings for collapsed section
   const doneTasks = $derived(tasks.filter(t => t.status === 'done'));
   const doneMeetings = $derived(meetings.filter(m => m.status === 'done'));
-  const pendingMeetings = $derived(meetings.filter(m => m.status !== 'done'));
   let showDone = $state(false);
 
-  function handleDndConsider(e: CustomEvent<{ items: Card[] }>) {
-    localPendingTasks = e.detail.items;
+  function handleDndConsider(e: CustomEvent<{ items: DndCard[] }>) {
+    localPendingItems = e.detail.items;
   }
 
-  function handleDndFinalize(e: CustomEvent<{ items: Card[] }>) {
-    localPendingTasks = e.detail.items;
-    localPendingTasks.forEach((card, i) => {
+  function handleDndFinalize(e: CustomEvent<{ items: DndCard[] }>) {
+    localPendingItems = e.detail.items;
+    localPendingItems.forEach((card, i) => {
+      if (card.card_type === 'meeting') return; // meetings keep their own position
       // Use column's weekId (not card's) so backlog→column drops get the right week assigned
       if (card.day_of_week !== dayOfWeek || card.week_id !== weekId || card.position !== i) {
         onMoveCard(card.id, weekId, dayOfWeek, i);
       }
     });
   }
+
+  // Clock state (only active for today's column)
+  let activeEntry = $state<TimeEntry | null>(null);
+  let entries = $state<TimeEntry[]>([]);
+  let showLog = $state(false);
+  let elapsedSeconds = $state(0);
+  let clockTick: ReturnType<typeof setInterval> | null = null;
+
+  // Today's date in YYYY-MM-DD format
+  const todayDate = new Date().toISOString().slice(0, 10);
+
+  function formatElapsed(seconds: number): string {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = seconds % 60;
+    if (h > 0) return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  }
+
+  onMount(async () => {
+    if (!isToday) return;
+    entries = await timeApi.listTimeEntries(todayDate);
+    activeEntry = entries.find(e => e.end_time === null) ?? null;
+
+    if (activeEntry) {
+      const startMs = parseSqliteUtc(activeEntry.start_time).getTime();
+      elapsedSeconds = Math.floor((Date.now() - startMs) / 1000);
+    }
+
+    clockTick = setInterval(() => {
+      if (activeEntry) {
+        const startMs = parseSqliteUtc(activeEntry.start_time).getTime();
+        elapsedSeconds = Math.floor((Date.now() - startMs) / 1000);
+      }
+    }, 1000);
+  });
+
+  onDestroy(() => {
+    if (clockTick) clearInterval(clockTick);
+  });
+
+  async function handleClockIn() {
+    activeEntry = await timeApi.clockIn(todayDate);
+    entries = await timeApi.listTimeEntries(todayDate);
+    elapsedSeconds = 0;
+  }
+
+  async function handleClockOut() {
+    if (!activeEntry) return;
+    activeEntry = await timeApi.clockOut(activeEntry.id);
+    entries = await timeApi.listTimeEntries(todayDate);
+    activeEntry = null;
+    elapsedSeconds = 0;
+  }
+
+  async function handleDeleteEntry(id: number) {
+    await timeApi.deleteTimeEntry(id);
+    entries = await timeApi.listTimeEntries(todayDate);
+    if (activeEntry?.id === id) {
+      activeEntry = null;
+      elapsedSeconds = 0;
+    }
+  }
+
+  async function handleUpdateEntryTime(id: number, field: 'start' | 'end', localTime: string) {
+    if (!localTime) return;
+    const utcDt = toUtcDatetime(localTime);
+    if (field === 'start') {
+      await timeApi.updateTimeEntry(id, utcDt, undefined, undefined);
+    } else {
+      await timeApi.updateTimeEntry(id, undefined, utcDt, undefined);
+    }
+    entries = await timeApi.listTimeEntries(todayDate);
+    if (activeEntry) {
+      activeEntry = entries.find(e => e.end_time === null) ?? null;
+    }
+  }
+
+  function totalLoggedHours(): number {
+    return entries.reduce((sum, e) => {
+      const start = parseSqliteUtc(e.start_time).getTime();
+      const end = e.end_time ? parseSqliteUtc(e.end_time).getTime() : Date.now();
+      return sum + (end - start) / 3600000;
+    }, 0);
+  }
+
+  // Parse SQLite UTC datetime string (no timezone) to JS Date correctly
+  function parseSqliteUtc(s: string): Date {
+    return new Date(s.replace(' ', 'T') + 'Z');
+  }
+
+  // Get local "HH:MM" from a SQLite UTC datetime string
+  function toLocalTime(s: string): string {
+    const d = parseSqliteUtc(s);
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+  }
+
+  // Convert local "HH:MM" + today's date to SQLite UTC datetime string
+  function toUtcDatetime(localTime: string): string {
+    const d = new Date(`${todayDate}T${localTime}:00`);
+    return d.toISOString().slice(0, 19).replace('T', ' ');
+  }
 </script>
 
 <div
-  class="flex flex-col min-w-0 flex-1 border-r border-[var(--color-glass-border)] last:border-r-0 backdrop-blur-[2px] {isToday ? 'bg-[var(--color-glass-bg)]' : ''}"
+  class="flex flex-col min-w-0 flex-1 border-r border-[var(--color-glass-border)] last:border-r-0 backdrop-blur-[2px] border-t-2 {isToday ? 'bg-[var(--color-glass-bg)] border-t-[var(--color-accent)]' : 'border-t-transparent'}"
 >
   <!-- Static header -->
   <div class="px-3 pt-3 pb-2 shrink-0">
-    <p
-      class="text-xs font-semibold text-[var(--color-text-muted)] uppercase tracking-wide"
-      class:text-[var(--color-text)]={isToday}
-    >{label}</p>
-    <p
-      class="text-xs text-[var(--color-muted)]"
-      class:text-[var(--color-accent)]={isToday}
-    >{date}</p>
+    <div class="flex items-start justify-between gap-2">
+      <div class="min-w-0">
+        <p
+          class="text-xs uppercase tracking-wide {isToday ? 'font-bold text-[var(--color-text)]' : 'font-semibold text-[var(--color-text-muted)]'}"
+        >{label}</p>
+        <p
+          class="text-xs text-[var(--color-muted)]"
+          class:text-[var(--color-accent)]={isToday}
+        >{date}</p>
+      </div>
+
+      {#if isToday}
+        <div class="flex items-center gap-1 shrink-0 mt-0.5">
+          {#if activeEntry}
+            <span class="text-xs tabular-nums font-mono text-[var(--color-accent)]">{formatElapsed(elapsedSeconds)}</span>
+            <button
+              onclick={handleClockOut}
+              class="text-xs px-1 py-px rounded bg-red-500/15 text-red-300 hover:bg-red-500/25 transition-colors leading-none"
+              title="Clock out"
+            >■</button>
+          {:else}
+            <button
+              onclick={handleClockIn}
+              class="text-xs px-1 py-px rounded bg-[var(--color-accent)]/10 text-[var(--color-muted)] hover:text-[var(--color-accent)] hover:bg-[var(--color-accent)]/15 transition-colors leading-none"
+              title="Clock in"
+            >▶</button>
+          {/if}
+          <button
+            onclick={() => (showLog = !showLog)}
+            class="text-xs text-[var(--color-muted)] hover:text-[var(--color-text)] transition-colors px-0.5"
+            title="Time log"
+          >≡</button>
+        </div>
+      {/if}
+    </div>
+
+    {#if isToday && showLog}
+      <div class="mt-2 p-2 bg-[var(--color-bg)] border border-[var(--color-glass-border)] rounded text-xs">
+        <div class="text-[var(--color-muted)] mb-1.5">Today's log · {totalLoggedHours().toFixed(1)}h</div>
+        {#if entries.length === 0}
+          <p class="text-[var(--color-muted)] italic">No entries yet</p>
+        {:else}
+          {#each entries as entry (entry.id)}
+            <div class="flex items-center gap-1 py-0.5">
+              <input
+                type="time"
+                value={toLocalTime(entry.start_time)}
+                onchange={(e) => handleUpdateEntryTime(entry.id, 'start', e.currentTarget.value)}
+                class="text-[0.65rem] bg-transparent border-b border-[var(--color-border)] text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)] w-14 tabular-nums"
+              />
+              <span class="text-[var(--color-muted)]">–</span>
+              <input
+                type="time"
+                value={entry.end_time ? toLocalTime(entry.end_time) : ''}
+                onchange={(e) => handleUpdateEntryTime(entry.id, 'end', e.currentTarget.value)}
+                placeholder="now"
+                class="text-[0.65rem] bg-transparent border-b border-[var(--color-border)] text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)] w-14 tabular-nums"
+              />
+              <button
+                onclick={() => handleDeleteEntry(entry.id)}
+                class="ml-auto text-red-400/50 hover:text-red-400 transition-colors"
+              >×</button>
+            </div>
+          {/each}
+        {/if}
+      </div>
+    {/if}
   </div>
+
   <div class="px-3 pb-2 shrink-0">
-    <LoadIndicator doneHours={doneHoursByType} plannedHours={plannedHoursByType} {availableHours} />
+    <LoadIndicator doneHours={doneHoursByType} plannedHours={plannedHoursByType} {availableHours} clockedHours={isToday ? totalLoggedHours() : undefined} />
   </div>
 
   <!-- Scrollable card area -->
   <div class="flex-1 overflow-y-auto min-h-0 px-3 py-2">
-    {#if pendingMeetings.length}
-      <div class="flex flex-col gap-1.5 mb-3">
-        {#each pendingMeetings as card (card.id)}
-          <CardComponent {card} {onMarkDone} />
-        {/each}
-      </div>
-    {/if}
-
     <div
       class="flex flex-col gap-1.5 min-h-[2rem] mb-3"
       use:dndzone={{
-        items: localPendingTasks,
+        items: localPendingItems,
         flipDurationMs: 150,
         dropTargetStyle: { outline: 'none', background: 'rgba(61,126,255,0.07)', 'border-radius': '6px' }
       }}
       onconsider={handleDndConsider}
       onfinalize={handleDndFinalize}
     >
-      {#each localPendingTasks as card (card.id)}
+      {#each localPendingItems as card (card.id)}
         <CardComponent {card} {onMarkDone} {onMoveToNextWeek} />
       {/each}
-      {#if isToday && localPendingTasks.length === 0 && pendingMeetings.length === 0}
+      {#if isToday && localPendingItems.length === 0}
         <p class="text-xs text-[var(--color-muted)] text-center py-2">Drag from backlog or add a task ↓</p>
       {/if}
     </div>

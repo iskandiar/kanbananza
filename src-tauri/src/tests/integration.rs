@@ -20,6 +20,7 @@ mod tests {
             .unwrap();
         let _ = db.execute("ALTER TABLE cards ADD COLUMN project_id INTEGER REFERENCES projects(id)", []);
         let _ = db.execute("ALTER TABLE cards ADD COLUMN done_at TEXT", []);
+        let _ = db.execute("ALTER TABLE cards ADD COLUMN deleted_at TEXT", []);
         db
     }
 

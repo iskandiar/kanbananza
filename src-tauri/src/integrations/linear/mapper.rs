@@ -152,16 +152,20 @@ fn upsert_issue(
         "state": issue.state.name,
     });
 
-    let existing: Option<(i64, Option<String>)> = db
+    let existing: Option<(i64, Option<String>, Option<String>)> = db
         .query_row(
-            "SELECT id, metadata FROM cards WHERE external_id = ? AND source = 'linear'",
+            "SELECT id, metadata, deleted_at FROM cards WHERE external_id = ? AND source = 'linear'",
             rusqlite::params![external_id],
-            |r| Ok((r.get(0)?, r.get(1)?)),
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
         )
         .optional()
         .map_err(|e| e.to_string())?;
 
-    if let Some((card_id, existing_meta_str)) = existing {
+    if let Some((card_id, existing_meta_str, deleted_at)) = existing {
+        // Card was user-deleted — don't re-create or update it
+        if deleted_at.is_some() {
+            return Ok(None);
+        }
         // Update mutable fields; preserve week_id / day_of_week.
         // Carry forward any ai_* keys from the stored metadata.
         let mut merged = metadata;

@@ -1,6 +1,7 @@
 <script lang="ts">
-  import type { Card, CardType } from '$lib/types';
-  import { createCard, createCardFromUrl } from '$lib/api/cards';
+  import type { Card, CardType, Impact } from '$lib/types';
+  import { createCard, createCardFromUrl, updateCard } from '$lib/api/cards';
+  import { boardStore } from '$lib/stores/board.svelte';
   import EditCardModal from '$lib/components/EditCardModal.svelte';
 
   let {
@@ -44,6 +45,51 @@
     return 'task';
   }
 
+  function extractFromTitle(title: string): {
+    cleanedTitle: string;
+    timeEstimate: number | null;
+    url: string | null;
+    impact: Impact | null;
+  } {
+    let cleaned = title;
+    let timeEstimate: number | null = null;
+    let extractedUrl: string | null = null;
+    let impact: Impact | null = null;
+
+    // Extract URL (http:// or https://)
+    const urlMatch = cleaned.match(/https?:\/\/\S+/);
+    if (urlMatch) {
+      extractedUrl = urlMatch[0];
+      cleaned = cleaned.replace(urlMatch[0], '').trim();
+    }
+
+    // Extract time (e.g., "1h", "30m", "1.5 hours", etc.)
+    const timeMatch = cleaned.match(/\b(\d+(?:\.\d+)?)\s*(h|hr|hrs?|hours?|m|min|mins?|minutes?)\b/i);
+    if (timeMatch) {
+      const value = parseFloat(timeMatch[1]);
+      const unit = timeMatch[2].toLowerCase();
+      if (unit === 'm' || unit === 'min' || unit === 'mins' || unit === 'minute' || unit === 'minutes') {
+        timeEstimate = value / 60;
+      } else {
+        timeEstimate = value;
+      }
+      cleaned = cleaned.replace(timeMatch[0], '').trim();
+    }
+
+    // Extract priority (!high, !mid, !low, !h, !m, !l)
+    const priorityMatch = cleaned.match(/!(high|mid|low|h|m|l)\b/i);
+    if (priorityMatch) {
+      const p = priorityMatch[1].toLowerCase();
+      if (p === 'h') impact = 'high';
+      else if (p === 'm') impact = 'mid';
+      else if (p === 'l') impact = 'low';
+      else impact = (p as Impact);
+      cleaned = cleaned.replace(priorityMatch[0], '').trim();
+    }
+
+    return { cleanedTitle: cleaned, timeEstimate, url: extractedUrl, impact };
+  }
+
   async function submit() {
     const trimmed = value.trim();
     if (!trimmed) return;
@@ -59,10 +105,25 @@
       } catch {
         // Known URL format but sync failed — fall back to generic card + edit modal
         try {
-          const card = await createCard(trimmed, inferTypeFromUrl(trimmed), weekId, dayOfWeek, undefined, trimmed);
-          value = '';
-          active = false;
-          onCardCreated?.(card);
+          const { cleanedTitle, timeEstimate, url: extractedUrl, impact } = extractFromTitle(trimmed);
+          const finalUrl = extractedUrl || trimmed;
+          const card = await createCard(cleanedTitle, inferTypeFromUrl(finalUrl), weekId, dayOfWeek, undefined, finalUrl);
+
+          // Update with extracted time and priority if present
+          if (timeEstimate !== null || impact !== null) {
+            const updatedCard = await updateCard(card.id, {
+              timeEstimate: timeEstimate ?? undefined,
+              impact: impact ?? undefined
+            });
+            value = '';
+            active = false;
+            onCardCreated?.(updatedCard);
+            boardStore.cards = boardStore.cards.map(c => c.id === updatedCard.id ? updatedCard : c);
+          } else {
+            value = '';
+            active = false;
+            onCardCreated?.(card);
+          }
           pendingEditCard = card;
         } catch (e2) {
           error = String(e2);
@@ -74,10 +135,24 @@
       isLoading = true;
       error = null;
       try {
-        const card = await createCard(trimmed, inferTypeFromUrl(trimmed), weekId, dayOfWeek, undefined, trimmed);
-        value = '';
-        active = false;
-        onCardCreated?.(card);
+        const { cleanedTitle, timeEstimate, impact } = extractFromTitle(trimmed);
+        const card = await createCard(cleanedTitle, inferTypeFromUrl(trimmed), weekId, dayOfWeek, undefined, trimmed);
+
+        // Update with extracted time and priority if present
+        if (timeEstimate !== null || impact !== null) {
+          const updatedCard = await updateCard(card.id, {
+            timeEstimate: timeEstimate ?? undefined,
+            impact: impact ?? undefined
+          });
+          value = '';
+          active = false;
+          onCardCreated?.(updatedCard);
+          boardStore.cards = boardStore.cards.map(c => c.id === updatedCard.id ? updatedCard : c);
+        } else {
+          value = '';
+          active = false;
+          onCardCreated?.(card);
+        }
         pendingEditCard = card;
       } catch (e) {
         error = String(e);
@@ -85,9 +160,64 @@
         isLoading = false;
       }
     } else {
-      onAdd(trimmed);
-      value = '';
-      active = false;
+      // Regular text input — extract time, URL, priority before creating
+      const { cleanedTitle, timeEstimate, url: extractedUrl, impact } = extractFromTitle(trimmed);
+
+      if (extractedUrl) {
+        // If URL was extracted, create as URL card with extracted values
+        isLoading = true;
+        error = null;
+        try {
+          const card = await createCard(cleanedTitle || trimmed, inferTypeFromUrl(extractedUrl), weekId, dayOfWeek, undefined, extractedUrl);
+
+          // Update with extracted time and priority if present
+          if (timeEstimate !== null || impact !== null) {
+            const updatedCard = await updateCard(card.id, {
+              timeEstimate: timeEstimate ?? undefined,
+              impact: impact ?? undefined
+            });
+            value = '';
+            active = false;
+            onCardCreated?.(updatedCard);
+            boardStore.cards = boardStore.cards.map(c => c.id === updatedCard.id ? updatedCard : c);
+          } else {
+            value = '';
+            active = false;
+            onCardCreated?.(card);
+          }
+          pendingEditCard = card;
+        } catch (e) {
+          error = String(e);
+        } finally {
+          isLoading = false;
+        }
+      } else if (timeEstimate !== null || impact !== null) {
+        // No URL but time or priority was extracted — create card directly with extracted values
+        isLoading = true;
+        error = null;
+        try {
+          const card = await createCard(cleanedTitle, 'task', weekId, dayOfWeek);
+
+          // Update with extracted time and priority
+          const updatedCard = await updateCard(card.id, {
+            timeEstimate: timeEstimate ?? undefined,
+            impact: impact ?? undefined
+          });
+          value = '';
+          active = false;
+          onCardCreated?.(updatedCard);
+          boardStore.cards = boardStore.cards.map(c => c.id === updatedCard.id ? updatedCard : c);
+        } catch (e) {
+          error = String(e);
+        } finally {
+          isLoading = false;
+        }
+      } else {
+        // No extraction needed — use regular add flow with cleaned title
+        onAdd(cleanedTitle);
+        value = '';
+        active = false;
+      }
     }
   }
 

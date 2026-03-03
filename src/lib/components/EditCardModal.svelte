@@ -3,6 +3,7 @@
   import { boardStore } from '$lib/stores/board.svelte';
   import { projectsStore } from '$lib/stores/projects.svelte';
   import * as cardsApi from '$lib/api/cards';
+  import { hoursToHHMM, parseHoursInput } from '$lib/utils';
   import { Users, GitPullRequest, MessageSquare, ListTodo, Eye, FileText, X } from 'lucide-svelte';
   import { portal } from '$lib/actions/portal';
 
@@ -55,7 +56,7 @@
   $effect(() => {
     popoverCardType = card.card_type;
     popoverImpact = card.impact ?? '';
-    popoverHours = card.time_estimate != null ? String(card.time_estimate) : '';
+    popoverHours = card.time_estimate != null ? hoursToHHMM(card.time_estimate) : '';
     popoverUrl = card.url ?? '';
     popoverNotes = card.notes ?? '';
     popoverProjectId = card.project_id ?? null;
@@ -173,15 +174,14 @@
         <label for="modal-hours" class="text-xs text-[var(--color-muted)] block mb-1">Hours</label>
         <input
           id="modal-hours"
-          type="number"
+          type="text"
           bind:value={popoverHours}
-          step="any"
-          min="0"
-          placeholder="0"
+          placeholder="1:30"
           class="w-full text-xs bg-[var(--color-surface)] border border-[var(--color-border)] rounded px-2 py-1 text-[var(--color-text)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
           onblur={() => {
-            if (popoverHours !== '' && popoverHours !== '0') {
-              savePopoverField({ timeEstimate: Number(popoverHours) });
+            const h = parseHoursInput(popoverHours);
+            if (h != null && h > 0) {
+              savePopoverField({ timeEstimate: h });
             } else {
               savePopoverField({});
             }

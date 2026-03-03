@@ -1,10 +1,12 @@
 use rusqlite::{Connection, OptionalExtension};
 use std::collections::HashMap;
 
-use crate::db::DbState;
+use crate::db::{DbState, row_to_card};
 use crate::integrations::gitlab::client::{
-    fetch_authored_mrs, fetch_mr_lines_changed, fetch_review_mrs, get_current_user, GitLabMR,
+    fetch_authored_mrs, fetch_mr_by_path, fetch_mr_lines_changed, fetch_review_mrs,
+    get_current_user, GitLabMR,
 };
+use crate::types::Card;
 
 /// Syncs GitLab MRs (both authored and assigned-for-review) into the local
 /// `cards` table via upsert on `external_id`.
@@ -119,16 +121,20 @@ fn upsert_mr(mr: &GitLabMR, role: &str, lines_changed: i64, db: &Connection) -> 
     })
     .to_string();
 
-    let existing: Option<(i64, Option<String>)> = db
+    let existing: Option<(i64, Option<String>, Option<String>)> = db
         .query_row(
-            "SELECT id, metadata FROM cards WHERE external_id = ? AND source = 'gitlab'",
+            "SELECT id, metadata, deleted_at FROM cards WHERE external_id = ? AND source = 'gitlab'",
             rusqlite::params![external_id],
-            |r| Ok((r.get(0)?, r.get(1)?)),
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
         )
         .optional()
         .map_err(|e| e.to_string())?;
 
-    if let Some((card_id, existing_meta_str)) = existing {
+    if let Some((card_id, existing_meta_str, deleted_at)) = existing {
+        // Card was user-deleted — don't re-create or update it
+        if deleted_at.is_some() {
+            return Ok(None);
+        }
         // Update mutable fields; preserve week_id / day_of_week.
         // Merge ai_* fields from existing metadata so AI content survives re-syncs.
         let mut merged = serde_json::json!({
@@ -171,6 +177,93 @@ fn upsert_mr(mr: &GitLabMR, role: &str, lines_changed: i64, db: &Connection) -> 
         .map_err(|e| format!("failed to insert GitLab MR card: {e}"))?;
         Ok(Some(db.last_insert_rowid()))
     }
+}
+
+const SELECT: &str =
+    "SELECT id,title,card_type,status,impact,time_estimate,url,week_id,day_of_week,\
+     position,source,external_id,notes,metadata,created_at,updated_at,project_id,done_at FROM cards";
+
+/// Fetches a single GitLab MR by URL, upserts it as a card, awaits AI
+/// evaluation, and returns the fully-populated `Card`.
+///
+/// URL format: `https://gitlab.com/<namespace>/<project>/-/merge_requests/<iid>`
+pub async fn create_single_mr_card(
+    db_state: &DbState,
+    url: &str,
+    week_id: Option<i64>,
+    day_of_week: Option<i64>,
+) -> Result<Card, String> {
+    // Parse project path and MR iid from the URL.
+    // Strip query string first, then find the `/-/merge_requests/` segment.
+    let path = url.split('?').next().unwrap_or(url).trim_end_matches('/');
+    let mr_marker = "/-/merge_requests/";
+    let mr_pos = path
+        .find(mr_marker)
+        .ok_or_else(|| format!("could not find '/-/merge_requests/' in URL: {url}"))?;
+
+    let iid_str = &path[mr_pos + mr_marker.len()..];
+    let iid: i64 = iid_str
+        .parse()
+        .map_err(|_| format!("could not parse MR iid from URL: {url}"))?;
+
+    // Everything between the host and `/-/merge_requests/` is the project namespace.
+    // e.g. `https://gitlab.com/group/project` → `group/project`
+    let after_host = path
+        .trim_start_matches("https://")
+        .trim_start_matches("http://");
+    let slash = after_host.find('/').ok_or_else(|| "malformed GitLab URL".to_string())?;
+    let project_path_raw = &after_host[slash + 1..mr_pos - (path.len() - after_host.len()) + slash + 1];
+    // URL-encode the project path (replace `/` with `%2F`).
+    let project_path_enc = project_path_raw.replace('/', "%2F");
+
+    // Phase 1: read PAT.
+    let pat = {
+        let db = db_state.0.lock().map_err(|e| e.to_string())?;
+        db.query_row(
+            "SELECT value FROM secrets WHERE key = 'gitlab_pat'",
+            [],
+            |r| r.get::<_, String>(0),
+        )
+        .optional()
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "GitLab PAT not configured".to_string())?
+    }; // DB lock released
+
+    log::debug!("[create_single_mr_card] fetching MR iid={iid} project={project_path_raw}");
+
+    // Phase 2: fetch the MR and its diff stats (no DB lock held).
+    let mr = fetch_mr_by_path(&pat, &project_path_enc, iid).await?;
+    let lines_changed = fetch_mr_lines_changed(&pat, mr.project_id, mr.iid).await;
+
+    // Phase 3: upsert and read back.
+    let card_id = {
+        let db = db_state.0.lock().map_err(|e| e.to_string())?;
+        let id = upsert_mr(&mr, "author", lines_changed, &db)?
+            .ok_or_else(|| format!("failed to upsert GitLab MR iid={iid}"))?;
+
+        // Apply week/day placement if provided (only on initial insert; upsert_mr
+        // preserves existing placement on update, so we patch here for new cards).
+        if week_id.is_some() || day_of_week.is_some() {
+            db.execute(
+                "UPDATE cards SET week_id=COALESCE(week_id,?), day_of_week=COALESCE(day_of_week,?) WHERE id=?",
+                rusqlite::params![week_id, day_of_week, id],
+            )
+            .map_err(|e| e.to_string())?;
+        }
+
+        id
+    }; // DB lock released
+
+    // Phase 4: await AI evaluation (no DB lock held during await).
+    log::debug!("[create_single_mr_card] running AI eval for card {card_id}");
+    if let Err(e) = crate::ai::evaluate_card(card_id, db_state).await {
+        log::warn!("[create_single_mr_card] AI eval failed for card {card_id}: {e}");
+    }
+
+    // Phase 5: re-fetch to include any AI fields written by evaluate_card.
+    let db = db_state.0.lock().map_err(|e| e.to_string())?;
+    db.query_row(&format!("{SELECT} WHERE id=?"), [card_id], row_to_card)
+        .map_err(|e| e.to_string())
 }
 
 /// For every GitLab card that is not in `open_ids` (i.e. the MR is no longer

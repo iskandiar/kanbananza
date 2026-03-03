@@ -21,6 +21,12 @@ use commands::{
     rollover::*,
     settings::*,
     shell::open_url,
+    sync_review::{
+        fetch_calendar_preview, confirm_calendar_sync, skip_sync_item,
+        fetch_linear_preview, confirm_linear_sync,
+        fetch_gitlab_preview, confirm_gitlab_sync,
+    },
+    time_entries::{clock_in, clock_out, list_time_entries, update_time_entry, delete_time_entry},
     weeks::*,
 };
 use db::DbState;
@@ -58,6 +64,13 @@ pub fn run() {
             }
             let _ = conn.execute("ALTER TABLE cards ADD COLUMN project_id INTEGER REFERENCES projects(id)", []);
             let _ = conn.execute("ALTER TABLE cards ADD COLUMN done_at TEXT", []);
+            // 0004 adds soft delete, sync_skip, and time_entries.
+            if let Err(e) = conn.execute_batch(include_str!("../migrations/0004_soft_delete.sql")) {
+                if !e.to_string().contains("already exists") {
+                    return Err(format!("failed to run soft_delete migration: {e}").into());
+                }
+            }
+            let _ = conn.execute("ALTER TABLE cards ADD COLUMN deleted_at TEXT", []);
             app.manage(DbState(Mutex::new(conn)));
 
             // OAuth callback is handled via loopback TCP in get_calendar_auth_url —
@@ -165,6 +178,20 @@ pub fn run() {
             backup_database,
             restore_database,
             clear_all_data,
+            // Time entries
+            clock_in,
+            clock_out,
+            list_time_entries,
+            update_time_entry,
+            delete_time_entry,
+            // Sync review
+            fetch_calendar_preview,
+            confirm_calendar_sync,
+            skip_sync_item,
+            fetch_linear_preview,
+            confirm_linear_sync,
+            fetch_gitlab_preview,
+            confirm_gitlab_sync,
         ])
         .run(tauri::generate_context!())
         .unwrap_or_else(|e| {

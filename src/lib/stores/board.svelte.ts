@@ -13,8 +13,8 @@ class BoardStore {
   private _calendarUnlisten: (() => void) | null = null;
   private _gitlabUnlisten: (() => void) | null = null;
 
-  // Cards with no week assigned — the global backlog
-  backlog = $derived(this.cards.filter((c) => c.week_id === null).sort((a, b) => a.position - b.position));
+  // Cards with no week assigned — the global backlog (exclude done cards)
+  backlog = $derived(this.cards.filter((c) => c.week_id === null && c.status !== 'done').sort((a, b) => a.position - b.position));
 
   // All cards for the current week, keyed by day_of_week (1–5)
   cardsByDay = $derived.by(() => {

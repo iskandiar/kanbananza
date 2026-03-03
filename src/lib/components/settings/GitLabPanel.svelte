@@ -4,6 +4,7 @@
   import { listen } from '@tauri-apps/api/event';
   import { getSecret, storeSecret } from '$lib/api/settings';
   import IntegrationCard from '../IntegrationCard.svelte';
+  import SyncReviewModal from '$lib/components/SyncReviewModal.svelte';
 
   let connected = $state(false);
   let editing = $state(false);
@@ -12,6 +13,7 @@
   let syncing = $state(false);
   let error = $state<string | null>(null);
   let syncMessage = $state<string | null>(null);
+  let showReviewModal = $state(false);
   let unlistenSynced: (() => void) | null = null;
 
   onMount(async () => {
@@ -98,7 +100,7 @@
   {#if connected && !editing}
     <div class="flex items-center gap-4 px-0 py-2 border-b border-[var(--color-border)]">
       <button
-        onclick={sync}
+        onclick={() => showReviewModal = true}
         disabled={syncing}
         class="text-xs px-2.5 py-1 rounded border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-text)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
       >
@@ -151,3 +153,14 @@
     <p class="text-xs text-red-400/90 py-2 border-b border-[var(--color-border)]">{error}</p>
   {/if}
 </div>
+
+{#if showReviewModal}
+  <SyncReviewModal
+    source="gitlab"
+    onClose={() => showReviewModal = false}
+    onSynced={(n) => {
+      syncMessage = `Imported ${n} item${n === 1 ? '' : 's'}`;
+      showReviewModal = false;
+    }}
+  />
+{/if}

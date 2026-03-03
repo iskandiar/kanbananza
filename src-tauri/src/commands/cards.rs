@@ -16,8 +16,8 @@ pub(crate) fn db_list_cards_by_week(
     week_id: Option<i64>,
 ) -> Result<Vec<Card>, String> {
     let sql = match week_id {
-        Some(_) => format!("{SELECT} WHERE week_id=? ORDER BY day_of_week,position"),
-        None => format!("{SELECT} WHERE week_id IS NULL ORDER BY position"),
+        Some(_) => format!("{SELECT} WHERE week_id=? AND deleted_at IS NULL ORDER BY day_of_week,position"),
+        None => format!("{SELECT} WHERE week_id IS NULL AND deleted_at IS NULL AND status != 'done' ORDER BY position"),
     };
     let mut stmt = db.prepare(&sql).map_err(|e| e.to_string())?;
     let cards = match week_id {
@@ -131,8 +131,11 @@ pub(crate) fn db_update_card(
 }
 
 pub(crate) fn db_delete_card(db: &Connection, id: i64) -> Result<(), String> {
-    db.execute("DELETE FROM cards WHERE id=?", [id])
-        .map_err(|e| e.to_string())?;
+    db.execute(
+        "UPDATE cards SET deleted_at=datetime('now'), updated_at=datetime('now') WHERE id=?",
+        [id],
+    )
+    .map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -186,7 +189,7 @@ pub(crate) fn db_duplicate_card(db: &Connection, id: i64) -> Result<Card, String
 pub(crate) fn db_search_cards(db: &Connection, query: &str) -> Result<Vec<Card>, String> {
     let pattern = format!("%{}%", query);
     let sql = format!(
-        "{SELECT} WHERE (title LIKE ?1 OR notes LIKE ?1) ORDER BY updated_at DESC LIMIT 50"
+        "{SELECT} WHERE (title LIKE ?1 OR notes LIKE ?1) AND deleted_at IS NULL ORDER BY updated_at DESC LIMIT 50"
     );
     let mut stmt = db.prepare(&sql).map_err(|e| e.to_string())?;
     let cards = stmt
@@ -295,6 +298,7 @@ mod tests {
             .unwrap();
         let _ = db.execute("ALTER TABLE cards ADD COLUMN project_id INTEGER REFERENCES projects(id)", []);
         let _ = db.execute("ALTER TABLE cards ADD COLUMN done_at TEXT", []);
+        let _ = db.execute("ALTER TABLE cards ADD COLUMN deleted_at TEXT", []);
         db
     }
 
@@ -349,10 +353,12 @@ mod tests {
         .unwrap();
 
         assert_eq!(updated.title, "Renamed");
-        // Re-read to confirm persistence through a second query.
-        let re_read = db_list_cards_by_week(&db, None).unwrap();
-        assert_eq!(re_read.len(), 1);
-        assert_eq!(re_read[0].title, "Renamed");
+        // Re-read by id to confirm persistence — done cards are excluded from
+        // the backlog query, so we query directly.
+        let re_read = db
+            .query_row(&format!("{SELECT} WHERE id=?"), [card.id], row_to_card)
+            .unwrap();
+        assert_eq!(re_read.title, "Renamed");
         // Status round-trips through the serde serialisation path.
         let status_str = serde_json::to_value(&updated.status).unwrap();
         assert_eq!(status_str.as_str().unwrap(), "done");

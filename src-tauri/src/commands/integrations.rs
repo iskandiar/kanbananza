@@ -316,6 +316,9 @@ pub async fn create_card_from_url(
             .ok_or_else(|| format!("could not extract Linear issue identifier from URL: {url}"))?
             .to_string();
         linear::create_single_issue_card(&state, &identifier, week_id, day_of_week).await
+    } else if url.contains("/-/merge_requests/") {
+        // GitLab MR URL: https://gitlab.com/<namespace>/<project>/-/merge_requests/<iid>
+        gitlab::create_single_mr_card(&state, &url, week_id, day_of_week).await
     } else if url.contains("notion.so") || url.contains("notion.com") {
         notion::create_card_from_url(&state, url, week_id, day_of_week).await
     } else if url.contains(".slack.com/archives/") {

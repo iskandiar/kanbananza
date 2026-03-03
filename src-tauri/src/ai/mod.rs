@@ -24,7 +24,7 @@ pub fn build_client(db_state: &DbState) -> Option<OpenAiClient> {
 
 pub async fn evaluate_card(card_id: i64, db_state: &DbState) -> Result<(), String> {
     // Phase A: read settings + card data (no lock held across await)
-    let (card_type, source, title, metadata_str, time_estimate, api_key) = {
+    let (card_type, source, title, metadata_str, _time_estimate, api_key) = {
         let db = db_state.0.lock().map_err(|e| e.to_string())?;
 
         // Check auto_ai toggle
@@ -79,6 +79,11 @@ pub async fn evaluate_card(card_id: i64, db_state: &DbState) -> Result<(), Strin
                 return Ok(());
             }
         }
+    }
+
+    // Skip AI for meeting cards — duration comes from calendar, no description needed
+    if card_type == "meeting" {
+        return Ok(());
     }
 
     // Phase B: AI call (no DB lock held)
@@ -188,17 +193,12 @@ pub async fn evaluate_card(card_id: i64, db_state: &DbState) -> Result<(), Strin
             let sys = SYSTEM_PROMPT_MR.to_string();
             (sys, msg)
         }
-        ("meeting", _) => {
-            let desc = metadata_val
-                .get("description")
-                .and_then(|d| d.as_str())
-                .unwrap_or("");
-            let hours = time_estimate.unwrap_or(0.0);
-            let sys = SYSTEM_PROMPT_MEETING.to_string();
-            let msg = format!("Meeting: {title}\nDescription: {desc}\nDuration: {hours}h");
-            (sys, msg)
-        }
         _ => {
+            // Skip AI for short generic titles — not worth the API call
+            if title.len() < 40 {
+                log::trace!("[evaluate_card] skipping AI for short title ({}): {:?}", title.len(), title);
+                return Ok(());
+            }
             let sys = SYSTEM_PROMPT_GENERIC.to_string();
             let msg = format!("Task: {title}");
             (sys, msg)

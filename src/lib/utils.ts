@@ -28,3 +28,26 @@ export function formatDateRange(startDate: string): string {
 export function sumHours(cards: any[]): number {
   return cards.reduce((sum, c) => sum + (c.time_estimate ?? 0), 0);
 }
+
+/** Converts decimal hours to H:MM format. E.g. 0.4167 → "0:25", 1.5 → "1:30" */
+export function hoursToHHMM(h: number): string {
+  const totalMinutes = Math.round(h * 60);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return `${hours}:${minutes.toString().padStart(2, '0')}`;
+}
+
+/** Parses "H:MM" or decimal hours string to decimal hours. Returns null for empty/invalid. */
+export function parseHoursInput(s: string): number | null {
+  const trimmed = s.trim();
+  if (!trimmed) return null;
+  const colonMatch = trimmed.match(/^(\d+):(\d{2})$/);
+  if (colonMatch) {
+    const h = parseInt(colonMatch[1], 10);
+    const m = parseInt(colonMatch[2], 10);
+    if (m >= 60) return null;
+    return h + m / 60;
+  }
+  const n = parseFloat(trimmed);
+  return isNaN(n) || n < 0 ? null : n;
+}
