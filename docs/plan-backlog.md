@@ -79,6 +79,15 @@ Items identified in daily-use friction audit, deferred for future implementation
 
 ---
 
+## Added 2026-03-04 (P2 items from time-tracking overhaul)
+
+- **Show menu icon and number of work in deck bar** — surface item count (and possibly type icon) in the deck/backlog toggle bar
+- **Past days can be collapsed** — allow collapsing previous day columns to reduce visual noise on the board
+- **Improve detecting time when pasting in card creation** — better heuristics to extract estimated time from pasted text (e.g. "30m review" → 0.5h)
+- **MCP for Notion / Linear** — integrate Notion and Linear via MCP protocol for richer two-way data access
+
+---
+
 ## Done ✓
 - Jump to today button
 - Delete card (in edit form)

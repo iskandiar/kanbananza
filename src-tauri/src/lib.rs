@@ -26,6 +26,10 @@ use commands::{
         fetch_linear_preview, confirm_linear_sync,
         fetch_gitlab_preview, confirm_gitlab_sync,
     },
+    card_time_entries::{
+        card_clock_in, card_clock_out, get_active_card_entry, list_card_time_entries,
+        finalize_card_time, list_card_entries_for_week,
+    },
     time_entries::{clock_in, clock_out, list_time_entries, update_time_entry, delete_time_entry},
     weeks::*,
 };
@@ -71,6 +75,12 @@ pub fn run() {
                 }
             }
             let _ = conn.execute("ALTER TABLE cards ADD COLUMN deleted_at TEXT", []);
+            // 0005 adds card_time_entries table.
+            if let Err(e) = conn.execute_batch(include_str!("../migrations/0005_card_time_tracking.sql")) {
+                if !e.to_string().contains("already exists") {
+                    return Err(format!("failed to run card_time_tracking migration: {e}").into());
+                }
+            }
             app.manage(DbState(Mutex::new(conn)));
 
             // OAuth callback is handled via loopback TCP in get_calendar_auth_url —
@@ -184,6 +194,13 @@ pub fn run() {
             list_time_entries,
             update_time_entry,
             delete_time_entry,
+            // Card time entries
+            card_clock_in,
+            card_clock_out,
+            get_active_card_entry,
+            list_card_time_entries,
+            finalize_card_time,
+            list_card_entries_for_week,
             // Sync review
             fetch_calendar_preview,
             confirm_calendar_sync,

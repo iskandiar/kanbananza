@@ -1,4 +1,5 @@
 pub mod ai;
+pub mod card_time_entries;
 pub mod cards;
 pub mod integrations;
 pub mod keychain;

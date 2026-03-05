@@ -42,13 +42,16 @@
     onScheduleToday?: (id: number) => void;
   } = $props();
 
+  let clockedByDay = $state<Record<string, number>>({});
+  const weeklyClocked = $derived(Object.values(clockedByDay).reduce((s, h) => s + h, 0));
+
   const unfinishedCount = $derived(
     days.flatMap(d => d.tasks).filter(c => c.status === 'planned').length
   );
 </script>
 
 <div class="flex flex-col h-screen text-[var(--color-text)]">
-  <WeekHeader {weekLabel} onPrev={onPrevWeek} onNext={onNextWeek} {isCurrentWeek} {onJumpToToday} {onRollover} {unfinishedCount} />
+  <WeekHeader {weekLabel} onPrev={onPrevWeek} onNext={onNextWeek} {isCurrentWeek} {onJumpToToday} {onRollover} {unfinishedCount} clockedHours={weeklyClocked} />
 
   <div class="flex flex-1 min-h-0">
     <div class="flex flex-1 min-w-0 overflow-x-auto">
@@ -67,6 +70,7 @@
           {onMarkDone}
           {onCardCreated}
           onMoveToNextWeek={onMoveCardToNextWeek}
+          onClockedUpdate={(hours) => { clockedByDay = { ...clockedByDay, [day.date]: hours }; }}
         />
       {/each}
     </div>

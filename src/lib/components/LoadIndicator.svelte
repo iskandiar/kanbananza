@@ -31,7 +31,7 @@
       </div>
       {#if clockedPct != null}
         <div
-          class="absolute top-1/2 -translate-y-1/2 w-0.5 h-3 bg-[var(--color-accent)] rounded-sm pointer-events-none"
+          class="absolute top-1/2 -translate-y-1/2 w-0.5 h-3 rounded-sm pointer-events-none {clockedHours != null && clockedHours > availableHours ? 'bg-rose-400' : 'bg-white'}"
           style="left: calc({clockedPct}% - 1px)"
         ></div>
       {/if}

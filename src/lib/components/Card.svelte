@@ -17,11 +17,13 @@
 </script>
 
 <script lang="ts">
-  import type { Card, Impact } from '$lib/types';
+  import { onMount, onDestroy } from 'svelte';
+  import type { Card, Impact, CardTimeEntry } from '$lib/types';
   import { boardStore } from '$lib/stores/board.svelte';
   import { projectsStore } from '$lib/stores/projects.svelte';
   import { openUrl } from '$lib/api/shell';
   import { hoursToHHMM } from '$lib/utils';
+  import * as cardTimeApi from '$lib/api/card_time_entries';
   import { Pencil, ExternalLink, Trash2, Check, Users, GitPullRequest, MessageSquare, ListTodo, Eye, FileText, X, GripVertical } from 'lucide-svelte';
   import EditCardModal from './EditCardModal.svelte';
 
@@ -29,12 +31,14 @@
     card,
     onMarkDone,
     onMoveToNextWeek,
-    onScheduleToday
+    onScheduleToday,
+    isToday = false
   }: {
     card: Card;
     onMarkDone: (id: number) => void;
     onMoveToNextWeek?: (id: number) => void;
     onScheduleToday?: (id: number) => void;
+    isToday?: boolean;
   } = $props();
 
   const cardProject = $derived(
@@ -91,6 +95,80 @@
 
   const meetingTime = $derived(card.card_type === 'meeting' ? getMeetingTimeRange(card.metadata) : null);
 
+  // Card-level time tracking state
+  let activeCardEntry = $state<CardTimeEntry | null>(null);
+  let cardEntries = $state<CardTimeEntry[]>([]);
+  let cardElapsedSeconds = $state(0);
+  let cardClockTick: ReturnType<typeof setInterval> | null = null;
+
+  function parseSqliteUtc(s: string): Date {
+    return new Date(s.replace(' ', 'T') + 'Z');
+  }
+
+  function formatCardElapsed(seconds: number): string {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = seconds % 60;
+    if (h > 0) return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  }
+
+  const totalCardClocked = $derived(
+    cardEntries
+      .filter(e => e.end_time !== null)
+      .reduce((sum, e) => {
+        const start = parseSqliteUtc(e.start_time).getTime();
+        const end = parseSqliteUtc(e.end_time!).getTime();
+        return sum + (end - start) / 3600000;
+      }, 0)
+  );
+
+  onMount(async () => {
+    if (!card.week_id) return; // backlog cards don't track time
+    try {
+      [activeCardEntry, cardEntries] = await Promise.all([
+        cardTimeApi.getActiveCardEntry(card.id),
+        cardTimeApi.listCardTimeEntries(card.id),
+      ]);
+      if (activeCardEntry) {
+        const startMs = parseSqliteUtc(activeCardEntry.start_time).getTime();
+        cardElapsedSeconds = Math.floor((Date.now() - startMs) / 1000);
+        cardClockTick = setInterval(() => {
+          if (activeCardEntry) {
+            const startMs = parseSqliteUtc(activeCardEntry.start_time).getTime();
+            cardElapsedSeconds = Math.floor((Date.now() - startMs) / 1000);
+          }
+        }, 1000);
+      }
+    } catch { /* non-critical */ }
+  });
+
+  onDestroy(() => {
+    if (cardClockTick) clearInterval(cardClockTick);
+  });
+
+  async function handleCardClockIn() {
+    const today = new Date().toISOString().slice(0, 10);
+    activeCardEntry = await cardTimeApi.cardClockIn(card.id, today);
+    cardEntries = await cardTimeApi.listCardTimeEntries(card.id);
+    cardElapsedSeconds = 0;
+    cardClockTick = setInterval(() => {
+      if (activeCardEntry) {
+        const startMs = parseSqliteUtc(activeCardEntry.start_time).getTime();
+        cardElapsedSeconds = Math.floor((Date.now() - startMs) / 1000);
+      }
+    }, 1000);
+  }
+
+  async function handleCardClockOut() {
+    if (!activeCardEntry) return;
+    if (cardClockTick) { clearInterval(cardClockTick); cardClockTick = null; }
+    await cardTimeApi.cardClockOut(activeCardEntry.id);
+    cardEntries = await cardTimeApi.listCardTimeEntries(card.id);
+    activeCardEntry = null;
+    cardElapsedSeconds = 0;
+  }
+
   // Editing state
   let isTitleEditing = $state(false);
   let editTitle = $state('');
@@ -143,8 +221,12 @@
     node.focus();
   }
 
-  function handleToggleDone() {
+  async function handleToggleDone() {
     if (card.status !== 'done') {
+      if (activeCardEntry) await handleCardClockOut();
+      if (cardEntries.filter(e => e.end_time !== null).length > 0) {
+        await cardTimeApi.finalizeCardTime(card.id);
+      }
       onMarkDone(card.id);
     } else {
       boardStore.updateCard(card.id, { status: 'planned' });
@@ -251,6 +333,15 @@
       {#if card.notes}
         <span class="text-xs text-[var(--color-muted)]" title="Has notes">•</span>
       {/if}
+
+      <!-- Card-level time tracking display (only when on board) -->
+      {#if card.week_id}
+        {#if activeCardEntry}
+          <span class="text-xs tabular-nums font-mono text-[var(--color-accent)]">{formatCardElapsed(cardElapsedSeconds)}</span>
+        {:else if totalCardClocked > 0}
+          <span class="text-xs text-[var(--color-muted)]">{totalCardClocked.toFixed(1)}h clocked</span>
+        {/if}
+      {/if}
     </div>
 
     {#if !isTitleEditing && !isPopoverOpen}
@@ -278,6 +369,23 @@
           aria-label="Duplicate card"
           title="Duplicate card"
         >⧉</button>
+        {#if isToday && card.card_type !== 'meeting'}
+          {#if activeCardEntry}
+            <button
+              data-no-dnd="true"
+              onclick={handleCardClockOut}
+              class="text-red-300 hover:text-red-200 transition-colors text-xs leading-none"
+              title="Pause timer"
+            >⏸</button>
+          {:else}
+            <button
+              data-no-dnd="true"
+              onclick={handleCardClockIn}
+              class="text-[var(--color-muted)] hover:text-[var(--color-accent)] transition-colors text-xs leading-none"
+              title="Start timer"
+            >▶</button>
+          {/if}
+        {/if}
         {#if onMoveToNextWeek}
           <button
             data-no-dnd="true"

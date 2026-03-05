@@ -9,8 +9,9 @@
     onPrev,
     onNext,
     onJumpToToday,
-    onRollover
-  }: { weekLabel: string; unfinishedCount: number; isCurrentWeek: boolean; onPrev: () => void; onNext: () => void; onJumpToToday: () => void; onRollover: () => void } = $props();
+    onRollover,
+    clockedHours
+  }: { weekLabel: string; unfinishedCount: number; isCurrentWeek: boolean; onPrev: () => void; onNext: () => void; onJumpToToday: () => void; onRollover: () => void; clockedHours?: number } = $props();
 
   let rolloverConfirming = $state(false);
   let showShortcuts = $state(false);
@@ -48,6 +49,9 @@
     >
       →
     </button>
+    {#if clockedHours && clockedHours > 0}
+      <span class="text-xs text-[var(--color-muted)] pl-1 tabular-nums">{clockedHours.toFixed(1)}h</span>
+    {/if}
     {#if !isCurrentWeek}
       <button
         onclick={onJumpToToday}

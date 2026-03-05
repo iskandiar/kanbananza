@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount, onDestroy, untrack } from 'svelte';
   import type { Card, TimeEntry } from '$lib/types';
   import { sumHours } from '$lib/utils';
   import { dndzone } from 'svelte-dnd-action';
@@ -23,7 +23,8 @@
     onMoveCard,
     onMarkDone,
     onCardCreated,
-    onMoveToNextWeek
+    onMoveToNextWeek,
+    onClockedUpdate
   }: {
     label: string;
     date: string;
@@ -38,6 +39,7 @@
     onMarkDone: (cardId: number) => void;
     onCardCreated?: (card: Card) => void;
     onMoveToNextWeek?: (id: number) => void;
+    onClockedUpdate?: (hours: number) => void;
   } = $props();
 
   // Include both tasks and meetings in load calculation
@@ -86,6 +88,11 @@
   // Today's date in YYYY-MM-DD format
   const todayDate = new Date().toISOString().slice(0, 10);
 
+  $effect(() => {
+    const hours = totalLoggedHours(); // reads `entries` — tracked
+    untrack(() => onClockedUpdate?.(hours)); // callback not tracked — no loop
+  });
+
   function formatElapsed(seconds: number): string {
     const h = Math.floor(seconds / 3600);
     const m = Math.floor((seconds % 3600) / 60);
@@ -95,21 +102,22 @@
   }
 
   onMount(async () => {
-    if (!isToday) return;
-    entries = await timeApi.listTimeEntries(todayDate);
-    activeEntry = entries.find(e => e.end_time === null) ?? null;
+    entries = await timeApi.listTimeEntries(date);
+    if (isToday) {
+      activeEntry = entries.find(e => e.end_time === null) ?? null;
 
-    if (activeEntry) {
-      const startMs = parseSqliteUtc(activeEntry.start_time).getTime();
-      elapsedSeconds = Math.floor((Date.now() - startMs) / 1000);
-    }
-
-    clockTick = setInterval(() => {
       if (activeEntry) {
         const startMs = parseSqliteUtc(activeEntry.start_time).getTime();
         elapsedSeconds = Math.floor((Date.now() - startMs) / 1000);
       }
-    }, 1000);
+
+      clockTick = setInterval(() => {
+        if (activeEntry) {
+          const startMs = parseSqliteUtc(activeEntry.start_time).getTime();
+          elapsedSeconds = Math.floor((Date.now() - startMs) / 1000);
+        }
+      }, 1000);
+    }
   });
 
   onDestroy(() => {
@@ -192,11 +200,11 @@
         <p
           class="text-xs text-[var(--color-muted)]"
           class:text-[var(--color-accent)]={isToday}
-        >{date}</p>
+        >{date}{#if entries.length > 0} · {totalLoggedHours().toFixed(1)}h{/if}</p>
       </div>
 
-      {#if isToday}
-        <div class="flex items-center gap-1 shrink-0 mt-0.5">
+      <div class="flex items-center gap-1 shrink-0 mt-0.5">
+        {#if isToday}
           {#if activeEntry}
             <span class="text-xs tabular-nums font-mono text-[var(--color-accent)]">{formatElapsed(elapsedSeconds)}</span>
             <button
@@ -211,18 +219,20 @@
               title="Clock in"
             >▶</button>
           {/if}
+        {/if}
+        {#if entries.length > 0 || isToday}
           <button
             onclick={() => (showLog = !showLog)}
             class="text-xs text-[var(--color-muted)] hover:text-[var(--color-text)] transition-colors px-0.5"
             title="Time log"
           >≡</button>
-        </div>
-      {/if}
+        {/if}
+      </div>
     </div>
 
-    {#if isToday && showLog}
+    {#if showLog}
       <div class="mt-2 p-2 bg-[var(--color-bg)] border border-[var(--color-glass-border)] rounded text-xs">
-        <div class="text-[var(--color-muted)] mb-1.5">Today's log · {totalLoggedHours().toFixed(1)}h</div>
+        <div class="text-[var(--color-muted)] mb-1.5">{isToday ? "Today's" : date} log · {totalLoggedHours().toFixed(1)}h</div>
         {#if entries.length === 0}
           <p class="text-[var(--color-muted)] italic">No entries yet</p>
         {:else}
@@ -242,10 +252,12 @@
                 placeholder="now"
                 class="text-[0.65rem] bg-transparent border-b border-[var(--color-border)] text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)] w-14 tabular-nums"
               />
-              <button
-                onclick={() => handleDeleteEntry(entry.id)}
-                class="ml-auto text-red-400/50 hover:text-red-400 transition-colors"
-              >×</button>
+              {#if isToday}
+                <button
+                  onclick={() => handleDeleteEntry(entry.id)}
+                  class="ml-auto text-red-400/50 hover:text-red-400 transition-colors"
+                >×</button>
+              {/if}
             </div>
           {/each}
         {/if}
@@ -254,7 +266,7 @@
   </div>
 
   <div class="px-3 pb-2 shrink-0">
-    <LoadIndicator doneHours={doneHoursByType} plannedHours={plannedHoursByType} {availableHours} clockedHours={isToday ? totalLoggedHours() : undefined} />
+    <LoadIndicator doneHours={doneHoursByType} plannedHours={plannedHoursByType} {availableHours} clockedHours={entries.length > 0 ? totalLoggedHours() : undefined} />
   </div>
 
   <!-- Scrollable card area -->
@@ -270,7 +282,7 @@
       onfinalize={handleDndFinalize}
     >
       {#each localPendingItems as card (card.id)}
-        <CardComponent {card} {onMarkDone} {onMoveToNextWeek} />
+        <CardComponent {card} {onMarkDone} {onMoveToNextWeek} {isToday} />
       {/each}
       {#if isToday && localPendingItems.length === 0}
         <p class="text-xs text-[var(--color-muted)] text-center py-2">Drag from backlog or add a task ↓</p>
@@ -288,10 +300,10 @@
         {#if showDone}
           <div class="flex flex-col gap-1.5 mt-1.5 pb-1">
             {#each doneMeetings as card (card.id)}
-              <CardComponent {card} {onMarkDone} />
+              <CardComponent {card} {onMarkDone} {isToday} />
             {/each}
             {#each doneTasks as card (card.id)}
-              <CardComponent {card} {onMarkDone} />
+              <CardComponent {card} {onMarkDone} {isToday} />
             {/each}
           </div>
         {/if}

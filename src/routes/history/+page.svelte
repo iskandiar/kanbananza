@@ -1,15 +1,16 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import type { Week } from '$lib/types';
+  import type { Week, CardTypeHours } from '$lib/types';
   import { invoke } from '@tauri-apps/api/core';
   import { summariseWeek } from '$lib/api/ai';
   import { listCardsByWeek } from '$lib/api/cards';
+  import { listCardEntriesForWeek } from '$lib/api/card_time_entries';
   import { formatDateRange } from '$lib/utils';
   import { toastStore } from '$lib/stores/toast.svelte';
   import KLogo from '$lib/components/KLogo.svelte';
   import { themeStore } from '$lib/stores/theme.svelte';
 
-  type WeekRow = Week & { cardCount: number; summarising: boolean };
+  type WeekRow = Week & { cardCount: number; summarising: boolean; clockedBreakdown: CardTypeHours[] };
 
   let weeks = $state<WeekRow[]>([]);
   let loading = $state(true);
@@ -20,8 +21,11 @@
       const raw: Week[] = await invoke('list_weeks');
       const rows = await Promise.all(
         raw.map(async (w) => {
-          const cards = await listCardsByWeek(w.id);
-          return { ...w, cardCount: cards.length, summarising: false };
+          const [cards, clockedBreakdown] = await Promise.all([
+            listCardsByWeek(w.id),
+            listCardEntriesForWeek(w.id),
+          ]);
+          return { ...w, cardCount: cards.length, summarising: false, clockedBreakdown };
         })
       );
       weeks = rows;
@@ -45,6 +49,40 @@
     } finally {
       weeks[idx].summarising = false;
     }
+  }
+
+  function totalClocked(breakdown: CardTypeHours[]): number {
+    return breakdown.reduce((sum, b) => sum + b.hours, 0);
+  }
+
+  const typeColors: Record<string, string> = {
+    task: '#10b981',
+    meeting: '#3b82f6',
+    mr: '#a855f7',
+    thread: '#eab308',
+    review: '#64748b',
+    documentation: '#64748b',
+  };
+
+  function typeColor(type: string): string {
+    return typeColors[type] ?? '#6b7280';
+  }
+
+  const maxClocked = $derived(
+    Math.max(1, ...weeks.map((w) => totalClocked(w.clockedBreakdown)))
+  );
+
+  type Segment = { x: number; w: number; color: string; type: string; hours: number };
+
+  function buildSegments(breakdown: CardTypeHours[], barWidth: number): Segment[] {
+    let x = 0;
+    return breakdown.map((b) => {
+      const total = totalClocked(breakdown);
+      const segW = Math.round((b.hours / total) * barWidth);
+      const seg: Segment = { x, w: segW, color: typeColor(b.card_type), type: b.card_type, hours: b.hours };
+      x += segW;
+      return seg;
+    });
   }
 </script>
 
@@ -91,6 +129,35 @@
                   <p class="text-xs text-[var(--color-text-muted)] mt-2 leading-relaxed max-w-xl">
                     {week.summary}
                   </p>
+                {/if}
+
+                {#if week.clockedBreakdown.length > 0}
+                  {@const barWidth = Math.round((totalClocked(week.clockedBreakdown) / maxClocked) * 200)}
+                  {@const segments = buildSegments(week.clockedBreakdown, barWidth)}
+                  <div class="mt-2">
+                    <p class="text-xs text-[var(--color-text-muted)]">{totalClocked(week.clockedBreakdown).toFixed(1)}h clocked</p>
+                    <div class="mt-1 flex items-center gap-2">
+                      <svg
+                        width={barWidth}
+                        height="8"
+                        class="rounded-full overflow-hidden"
+                      >
+                        {#each segments as seg (seg.type)}
+                          <rect x={seg.x} y="0" width={seg.w} height="8" fill={seg.color}>
+                            <title>{seg.type}: {seg.hours.toFixed(1)}h</title>
+                          </rect>
+                        {/each}
+                      </svg>
+                      <div class="flex items-center gap-2 flex-wrap">
+                        {#each week.clockedBreakdown as b (b.card_type)}
+                          <span class="text-[0.6rem] text-[var(--color-text-muted)] flex items-center gap-1">
+                            <span class="inline-block w-2 h-2 rounded-sm" style="background: {typeColor(b.card_type)}"></span>
+                            {b.card_type} {b.hours.toFixed(1)}h
+                          </span>
+                        {/each}
+                      </div>
+                    </div>
+                  </div>
                 {/if}
               </div>
 
