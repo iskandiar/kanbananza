@@ -13,6 +13,7 @@
   let {
     label,
     date,
+    displayDate,
     dayOfWeek,
     weekId,
     meetings = [],
@@ -27,7 +28,8 @@
     onClockedUpdate
   }: {
     label: string;
-    date: string;
+    date: string;       // ISO YYYY-MM-DD — used for ALL API calls
+    displayDate: string; // "Mar 6" etc — used only for display
     dayOfWeek: number;
     weekId: number | null;
     meetings: Card[];
@@ -200,7 +202,7 @@
         <p
           class="text-xs text-[var(--color-muted)]"
           class:text-[var(--color-accent)]={isToday}
-        >{date}{#if entries.length > 0} · {totalLoggedHours().toFixed(1)}h{/if}</p>
+        >{displayDate}{#if entries.length > 0} · {totalLoggedHours().toFixed(1)}h{/if}</p>
       </div>
 
       <div class="flex items-center gap-1 shrink-0 mt-0.5">
@@ -232,7 +234,7 @@
 
     {#if showLog}
       <div class="mt-2 p-2 bg-[var(--color-bg)] border border-[var(--color-glass-border)] rounded text-xs">
-        <div class="text-[var(--color-muted)] mb-1.5">{isToday ? "Today's" : date} log · {totalLoggedHours().toFixed(1)}h</div>
+        <div class="text-[var(--color-muted)] mb-1.5">{isToday ? "Today's" : displayDate} log · {totalLoggedHours().toFixed(1)}h</div>
         {#if entries.length === 0}
           <p class="text-[var(--color-muted)] italic">No entries yet</p>
         {:else}

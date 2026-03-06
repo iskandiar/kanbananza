@@ -62,6 +62,7 @@ class BoardStore {
   get days(): Array<{
     label: string;
     date: string;
+    displayDate: string;
     dayOfWeek: number;
     weekId: number | null;
     isToday: boolean;
@@ -78,10 +79,14 @@ class BoardStore {
     return DAY_LABELS.map((label, i) => {
       const d = new Date(monday);
       d.setDate(monday.getDate() + i);
-      const date = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+      // ISO date for API calls (YYYY-MM-DD)
+      const date = d.toISOString().slice(0, 10);
+      // Short display label (e.g. "Mar 6")
+      const displayDate = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
       return {
         label,
         date,
+        displayDate,
         dayOfWeek: i + 1,
         weekId: w.id,
         isToday: todayDOW === i + 1,

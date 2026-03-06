@@ -24,7 +24,7 @@
     onScheduleToday
   }: {
     weekLabel: string;
-    days: Array<{ label: string; date: string; dayOfWeek: number; weekId: number | null; isToday: boolean; meetings: Card[]; tasks: Card[] }>;
+    days: Array<{ label: string; date: string; displayDate: string; dayOfWeek: number; weekId: number | null; isToday: boolean; meetings: Card[]; tasks: Card[] }>;
     backlogCards: Card[];
     availableHours: number;
     isCurrentWeek: boolean;
@@ -59,6 +59,7 @@
         <DayColumn
           label={day.label}
           date={day.date}
+          displayDate={day.displayDate}
           dayOfWeek={day.dayOfWeek}
           weekId={day.weekId}
           isToday={day.isToday}
