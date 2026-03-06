@@ -232,11 +232,14 @@
     {/if}
   </div>
 
-  <!-- svelte-ignore a11y_click_events_have_key_events -->
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
-    class="flex-1 min-w-0 cursor-pointer"
+    class="flex-1 min-w-0"
+    class:cursor-pointer={!isPopoverOpen}
+    class:cursor-default={isPopoverOpen}
+    role="button"
+    tabindex="0"
     onclick={openPopover}
+    onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openPopover(); } }}
   >
     {#if meetingTime}
       <span class="text-xs text-[var(--color-muted)] mb-1 block">{meetingTime}</span>
