@@ -162,7 +162,7 @@
     } else {
       await timeApi.updateTimeEntry(id, undefined, utcDt, undefined);
     }
-    entries = await timeApi.listTimeEntries(todayDate);
+    entries = await timeApi.listTimeEntries(date);
     if (activeEntry) {
       activeEntry = entries.find(e => e.end_time === null) ?? null;
     }
@@ -247,7 +247,7 @@
           {/if}
         {/if}
         <button
-          onclick={() => (showLog = !showLog)}
+          onclick={() => { showLog = !showLog; confirmingEntryId = null; }}
           class="text-xs text-[var(--color-muted)] hover:text-[var(--color-text)] transition-colors px-0.5"
           title="Time log"
         >≡</button>
@@ -284,7 +284,7 @@
               {:else if confirmingEntryId === entry.id}
                 <span class="ml-auto text-[0.6rem] text-rose-400">Delete?</span>
                 <button
-                  onclick={() => { handleDeleteEntry(entry.id); confirmingEntryId = null; }}
+                  onclick={async () => { await handleDeleteEntry(entry.id); confirmingEntryId = null; }}
                   class="text-rose-400 hover:text-rose-300 transition-colors text-xs leading-none"
                   title="Confirm delete"
                 >✓</button>
