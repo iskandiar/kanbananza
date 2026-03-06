@@ -239,7 +239,7 @@
     role="button"
     tabindex="0"
     onclick={openPopover}
-    onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openPopover(); } }}
+    onkeydown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target === e.currentTarget) { e.preventDefault(); openPopover(); } }}
   >
     {#if meetingTime}
       <span class="text-xs text-[var(--color-muted)] mb-1 block">{meetingTime}</span>
