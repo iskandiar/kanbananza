@@ -1,16 +1,21 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import type { Week, CardTypeHours } from '$lib/types';
+  import type { Week, CardTypeHours, DayTypeHours } from '$lib/types';
   import { invoke } from '@tauri-apps/api/core';
   import { summariseWeek } from '$lib/api/ai';
   import { listCardsByWeek } from '$lib/api/cards';
-  import { listCardEntriesForWeek } from '$lib/api/card_time_entries';
+  import { listCardEntriesForWeek, listDayEntriesForWeek } from '$lib/api/card_time_entries';
   import { formatDateRange } from '$lib/utils';
   import { toastStore } from '$lib/stores/toast.svelte';
   import KLogo from '$lib/components/KLogo.svelte';
   import { themeStore } from '$lib/stores/theme.svelte';
 
-  type WeekRow = Week & { cardCount: number; summarising: boolean; clockedBreakdown: CardTypeHours[] };
+  type WeekRow = Week & {
+    cardCount: number;
+    summarising: boolean;
+    clockedBreakdown: CardTypeHours[];
+    dayBreakdown: DayTypeHours[];
+  };
 
   let weeks = $state<WeekRow[]>([]);
   let loading = $state(true);
@@ -21,11 +26,12 @@
       const raw: Week[] = await invoke('list_weeks');
       const rows = await Promise.all(
         raw.map(async (w) => {
-          const [cards, clockedBreakdown] = await Promise.all([
+          const [cards, clockedBreakdown, dayBreakdown] = await Promise.all([
             listCardsByWeek(w.id),
             listCardEntriesForWeek(w.id),
+            listDayEntriesForWeek(w.id),
           ]);
-          return { ...w, cardCount: cards.length, summarising: false, clockedBreakdown };
+          return { ...w, cardCount: cards.length, summarising: false, clockedBreakdown, dayBreakdown };
         })
       );
       weeks = rows;
@@ -68,20 +74,32 @@
     return typeColors[type] ?? '#6b7280';
   }
 
-  const maxClocked = $derived(
-    Math.max(1, ...weeks.map((w) => totalClocked(w.clockedBreakdown)))
-  );
+  const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
 
-  type Segment = { x: number; w: number; color: string; type: string; hours: number };
+  function dayDate(weekStart: string, dayIndex: number): string {
+    const d = new Date(weekStart + 'T00:00:00');
+    d.setDate(d.getDate() + dayIndex);
+    return d.toISOString().slice(0, 10);
+  }
 
-  function buildSegments(breakdown: CardTypeHours[], barWidth: number): Segment[] {
-    let x = 0;
-    return breakdown.map((b) => {
-      const total = totalClocked(breakdown);
-      const segW = Math.round((b.hours / total) * barWidth);
-      const seg: Segment = { x, w: segW, color: typeColor(b.card_type), type: b.card_type, hours: b.hours };
-      x += segW;
-      return seg;
+  type DayBar = {
+    label: string;
+    date: string;
+    hours: number;
+    segments: { card_type: string; hours: number; color: string }[];
+  };
+
+  function buildDayBars(weekStart: string, dayBreakdown: DayTypeHours[]): DayBar[] {
+    return DAY_LABELS.map((label, i) => {
+      const date = dayDate(weekStart, i);
+      const entries = dayBreakdown.filter(d => d.date === date);
+      const hours = entries.reduce((s, e) => s + e.hours, 0);
+      return {
+        label,
+        date,
+        hours,
+        segments: entries.map(e => ({ card_type: e.card_type, hours: e.hours, color: typeColor(e.card_type) })),
+      };
     });
   }
 </script>
@@ -115,53 +133,28 @@
     {:else}
       <div class="flex flex-col gap-0">
         {#each weeks as week (week.id)}
-          <div class="py-4 border-b border-[var(--color-border)]">
-            <div class="flex items-start justify-between gap-4">
-              <!-- Left: date + count -->
-              <div class="min-w-0">
+          {@const dayBars = buildDayBars(week.start_date, week.dayBreakdown)}
+          {@const maxDayHours = Math.max(1, ...dayBars.map(d => d.hours))}
+          {@const BAR_HEIGHT = 56}
+          <div class="py-5 border-b border-[var(--color-border)]">
+            <!-- Week header row -->
+            <div class="flex items-center justify-between gap-4 mb-3">
+              <div>
                 <p class="text-sm font-medium text-[var(--color-text)]">
                   {formatDateRange(week.start_date)}
                 </p>
                 <p class="text-xs text-[var(--color-text-muted)] mt-0.5">
                   {week.cardCount} card{week.cardCount === 1 ? '' : 's'}
+                  {#if totalClocked(week.clockedBreakdown) > 0}
+                    · {totalClocked(week.clockedBreakdown).toFixed(1)}h clocked
+                  {/if}
                 </p>
                 {#if week.summary}
                   <p class="text-xs text-[var(--color-text-muted)] mt-2 leading-relaxed max-w-xl">
                     {week.summary}
                   </p>
                 {/if}
-
-                {#if week.clockedBreakdown.length > 0}
-                  {@const barWidth = Math.round((totalClocked(week.clockedBreakdown) / maxClocked) * 200)}
-                  {@const segments = buildSegments(week.clockedBreakdown, barWidth)}
-                  <div class="mt-2">
-                    <p class="text-xs text-[var(--color-text-muted)]">{totalClocked(week.clockedBreakdown).toFixed(1)}h clocked</p>
-                    <div class="mt-1 flex items-center gap-2">
-                      <svg
-                        width={barWidth}
-                        height="8"
-                        class="rounded-full overflow-hidden"
-                      >
-                        {#each segments as seg (seg.type)}
-                          <rect x={seg.x} y="0" width={seg.w} height="8" fill={seg.color}>
-                            <title>{seg.type}: {seg.hours.toFixed(1)}h</title>
-                          </rect>
-                        {/each}
-                      </svg>
-                      <div class="flex items-center gap-2 flex-wrap">
-                        {#each week.clockedBreakdown as b (b.card_type)}
-                          <span class="text-[0.6rem] text-[var(--color-text-muted)] flex items-center gap-1">
-                            <span class="inline-block w-2 h-2 rounded-sm" style="background: {typeColor(b.card_type)}"></span>
-                            {b.card_type} {b.hours.toFixed(1)}h
-                          </span>
-                        {/each}
-                      </div>
-                    </div>
-                  </div>
-                {/if}
               </div>
-
-              <!-- Right: summarize button -->
               <button
                 onclick={() => summarise(week.id)}
                 disabled={week.summarising || week.cardCount === 0}
@@ -170,6 +163,45 @@
                 {week.summarising ? '…' : '✦ Summarize'}
               </button>
             </div>
+
+            <!-- Day bar chart -->
+            <div class="flex gap-2 items-end">
+              {#each dayBars as day (day.date)}
+                {@const barH = day.hours > 0 ? Math.max(4, Math.round((day.hours / maxDayHours) * BAR_HEIGHT)) : 0}
+                <div class="flex flex-col items-center gap-1 flex-1 min-w-0">
+                  <!-- Stacked bar -->
+                  <div class="w-full flex flex-col-reverse rounded-sm overflow-hidden" style="height: {BAR_HEIGHT}px; background: var(--color-surface);">
+                    {#if day.hours > 0}
+                      {#each day.segments as seg (seg.card_type)}
+                        {@const segH = Math.max(2, Math.round((seg.hours / day.hours) * barH))}
+                        <div
+                          style="height: {segH}px; background: {seg.color};"
+                          title="{seg.card_type}: {seg.hours.toFixed(1)}h"
+                        ></div>
+                      {/each}
+                    {/if}
+                  </div>
+                  <!-- Hours label -->
+                  <p class="text-[0.6rem] tabular-nums text-[var(--color-text-muted)]">
+                    {day.hours > 0 ? day.hours.toFixed(1) + 'h' : '–'}
+                  </p>
+                  <!-- Day label -->
+                  <p class="text-[0.6rem] text-[var(--color-muted)] uppercase tracking-wide">{day.label}</p>
+                </div>
+              {/each}
+            </div>
+
+            <!-- Legend -->
+            {#if week.clockedBreakdown.length > 0}
+              <div class="flex items-center gap-3 mt-2 flex-wrap">
+                {#each week.clockedBreakdown as b (b.card_type)}
+                  <span class="text-[0.6rem] text-[var(--color-text-muted)] flex items-center gap-1">
+                    <span class="inline-block w-2 h-2 rounded-sm" style="background: {typeColor(b.card_type)}"></span>
+                    {b.card_type}
+                  </span>
+                {/each}
+              </div>
+            {/if}
           </div>
         {/each}
       </div>
