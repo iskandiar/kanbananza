@@ -237,8 +237,8 @@
       cleaned = cleaned.replace(urlMatch[0], '').trim();
     }
 
-    // Try H:MM format first (e.g. 0:30, 1:30, 2:00)
-    const hmMatch = cleaned.match(/\b(\d+):(\d{2})\b/);
+    // Try H:MM format first (e.g. 0:30, 1:30, 2:00) — require valid minutes 00-59
+    const hmMatch = cleaned.match(/(?<!\.)(\b\d+):([0-5]\d)\b/);
     if (hmMatch) {
       timeEstimate = parseInt(hmMatch[1]) + parseInt(hmMatch[2]) / 60;
       cleaned = cleaned.replace(hmMatch[0], '').trim();
