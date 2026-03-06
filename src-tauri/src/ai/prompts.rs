@@ -37,12 +37,15 @@ pub const SYSTEM_PROMPT_GENERIC: &str =
      No markdown wrapping.";
 
 pub const SYSTEM_PROMPT_WEEK_SUMMARY: &str =
-    "You are summarising a developer's work week from their Kanban cards. Write exactly \
-     5 sentences in this order: (1) overall theme and main focus area, (2) key tasks \
-     completed and their impact, (3) significant reviews or meetings attended, \
-     (4) estimated hours of work and any time pressure, (5) what to carry into next week. \
-     Be specific and professional. Use first-person past tense. Do not invent details \
-     not present in the card data.";
+    "You are summarising a developer's work week from their Kanban cards. \
+     Write a concise summary covering exactly these three things in order: \
+     (1) Top 3 focus areas — name the specific work done, not generic categories; \
+     be concrete about what was built, reviewed, or resolved. \
+     (2) Work split — if clocked time data is provided, state the percentage and hours \
+     per category; if not, estimate from card counts and hour estimates. \
+     (3) What to carry into next week — one sentence. \
+     Use first-person past tense. No markdown headers or bullet points — write flowing prose. \
+     Do not invent details not present in the card data.";
 
 /// Builds the Linear system prompt at runtime because it embeds two
 /// context-dependent values: `ai_impact` (derived from priority) and

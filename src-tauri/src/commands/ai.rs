@@ -7,7 +7,7 @@ use tauri::State;
 #[tauri::command]
 pub async fn summarise_week(week_id: i64, state: State<'_, DbState>) -> Result<String, String> {
     // Phase A: fetch cards + API key (no lock across await)
-    let (cards, client) = {
+    let (cards, clocked_hours, client) = {
         let db = state.0.lock().map_err(|e| e.to_string())?;
 
         let key: Option<String> = db
@@ -35,7 +35,25 @@ pub async fn summarise_week(week_id: i64, state: State<'_, DbState>) -> Result<S
             .filter_map(|r| r.ok())
             .collect();
 
-        (cards, client)
+        let mut hours_stmt = db
+            .prepare(
+                "SELECT c.card_type, \
+                 SUM((julianday(cte.end_time) - julianday(cte.start_time)) * 24.0) as hours \
+                 FROM card_time_entries cte \
+                 JOIN cards c ON c.id = cte.card_id \
+                 WHERE c.week_id=? AND cte.end_time IS NOT NULL \
+                 GROUP BY c.card_type \
+                 ORDER BY hours DESC",
+            )
+            .map_err(|e| e.to_string())?;
+
+        let clocked_hours: Vec<(String, f64)> = hours_stmt
+            .query_map(rusqlite::params![week_id], |r| Ok((r.get(0)?, r.get(1)?)))
+            .map_err(|e| e.to_string())?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        (cards, clocked_hours, client)
     }; // DB lock released
 
     if cards.is_empty() {
@@ -43,6 +61,18 @@ pub async fn summarise_week(week_id: i64, state: State<'_, DbState>) -> Result<S
     }
 
     // Phase B: AI call
+    let time_section = if clocked_hours.is_empty() {
+        String::new()
+    } else {
+        let total: f64 = clocked_hours.iter().map(|(_, h)| h).sum();
+        let lines = clocked_hours
+            .iter()
+            .map(|(t, h)| format!("  {t}: {h:.1}h ({:.0}%)", h / total * 100.0))
+            .collect::<Vec<_>>()
+            .join("\n");
+        format!("\n\nActual clocked time by category:\n{lines}\nTotal: {total:.1}h")
+    };
+
     let user_msg = cards
         .iter()
         .map(|(t, title, status, metadata)| {
@@ -60,7 +90,8 @@ pub async fn summarise_week(week_id: i64, state: State<'_, DbState>) -> Result<S
             line
         })
         .collect::<Vec<_>>()
-        .join("\n");
+        .join("\n")
+        + &time_section;
 
     let summary = client
         .complete(SYSTEM_PROMPT_WEEK_SUMMARY, &user_msg)
