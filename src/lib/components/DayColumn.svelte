@@ -86,6 +86,9 @@
   let showLog = $state(false);
   let elapsedSeconds = $state(0);
   let clockTick: ReturnType<typeof setInterval> | null = null;
+  let addingEntry = $state(false);
+  let newEntryStart = $state('');
+  let newEntryEnd = $state('');
 
   // Today's date in YYYY-MM-DD format
   const todayDate = new Date().toISOString().slice(0, 10);
@@ -163,6 +166,23 @@
     }
   }
 
+  async function handleAddManualEntry() {
+    if (!newEntryStart) return;
+    const startUtc = toUtcDatetime(newEntryStart);
+    const endUtc = newEntryEnd ? toUtcDatetime(newEntryEnd) : undefined;
+    const entry = await timeApi.clockIn(date);
+    try {
+      await timeApi.updateTimeEntry(entry.id, startUtc, endUtc, undefined);
+    } catch (e) {
+      await timeApi.deleteTimeEntry(entry.id);
+      throw e;
+    }
+    entries = await timeApi.listTimeEntries(date);
+    addingEntry = false;
+    newEntryStart = '';
+    newEntryEnd = '';
+  }
+
   function totalLoggedHours(): number {
     return entries.reduce((sum, e) => {
       const start = parseSqliteUtc(e.start_time).getTime();
@@ -182,9 +202,9 @@
     return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
   }
 
-  // Convert local "HH:MM" + today's date to SQLite UTC datetime string
-  function toUtcDatetime(localTime: string): string {
-    const d = new Date(`${todayDate}T${localTime}:00`);
+  // Convert local "HH:MM" + a given ISO date to SQLite UTC datetime string
+  function toUtcDatetime(localTime: string, isoDate: string = date): string {
+    const d = new Date(`${isoDate}T${localTime}:00`);
     return d.toISOString().slice(0, 19).replace('T', ' ');
   }
 </script>
@@ -222,13 +242,11 @@
             >▶</button>
           {/if}
         {/if}
-        {#if entries.length > 0 || isToday}
-          <button
-            onclick={() => (showLog = !showLog)}
-            class="text-xs text-[var(--color-muted)] hover:text-[var(--color-text)] transition-colors px-0.5"
-            title="Time log"
-          >≡</button>
-        {/if}
+        <button
+          onclick={() => (showLog = !showLog)}
+          class="text-xs text-[var(--color-muted)] hover:text-[var(--color-text)] transition-colors px-0.5"
+          title="Time log"
+        >≡</button>
       </div>
     </div>
 
@@ -262,6 +280,37 @@
               {/if}
             </div>
           {/each}
+        {/if}
+        {#if !isToday}
+          {#if addingEntry}
+            <div class="flex items-center gap-1 pt-1 border-t border-[var(--color-border)] mt-1">
+              <input
+                type="time"
+                bind:value={newEntryStart}
+                class="text-[0.65rem] bg-transparent border-b border-[var(--color-border)] text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)] w-14 tabular-nums"
+              />
+              <span class="text-[var(--color-muted)]">–</span>
+              <input
+                type="time"
+                bind:value={newEntryEnd}
+                class="text-[0.65rem] bg-transparent border-b border-[var(--color-border)] text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)] w-14 tabular-nums"
+              />
+              <button
+                onclick={handleAddManualEntry}
+                disabled={!newEntryStart}
+                class="ml-auto text-[0.6rem] px-1 py-px rounded bg-[var(--color-accent)]/10 text-[var(--color-accent)] hover:bg-[var(--color-accent)]/20 disabled:opacity-40 transition-colors"
+              >Save</button>
+              <button
+                onclick={() => { addingEntry = false; newEntryStart = ''; newEntryEnd = ''; }}
+                class="text-[var(--color-muted)] hover:text-[var(--color-text)] transition-colors text-xs"
+              >×</button>
+            </div>
+          {:else}
+            <button
+              onclick={() => (addingEntry = true)}
+              class="mt-1 text-[0.6rem] text-[var(--color-muted)] hover:text-[var(--color-accent)] transition-colors"
+            >+ Add entry</button>
+          {/if}
         {/if}
       </div>
     {/if}
