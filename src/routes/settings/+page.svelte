@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { getVersion } from '@tauri-apps/api/app';
   import { settingsStore } from '$lib/stores/settings.svelte';
   import { getSecret, storeSecret, updateSettings, backupDatabase, restoreDatabase, clearAllData } from '$lib/api/settings';
   import { save, open } from '@tauri-apps/plugin-dialog';
@@ -10,6 +11,9 @@
   import NotionPanel from '$lib/components/settings/NotionPanel.svelte';
   import SlackPanel from '$lib/components/settings/SlackPanel.svelte';
   import type { AiProvider } from '$lib/types';
+
+  // --- App version ---
+  let appVersion = $state('');
 
   // --- Workload state ---
   let availableHours = $state(8);
@@ -94,6 +98,7 @@
     if (selectedProvider === 'anthropic') selectedProvider = 'openai';
     autoAiEnabled = settingsStore.settings?.auto_ai ?? false;
     await loadKeyStatus(selectedProvider);
+    appVersion = await getVersion();
   });
 </script>
 
@@ -286,6 +291,11 @@
         </div>
       </div>
     </section>
+
+    <!-- Version -->
+    <div class="mt-8 pt-4 border-t border-[var(--color-border)]">
+      <p class="text-xs text-[var(--color-muted)]">Kanbananza {appVersion}</p>
+    </div>
 
   </main>
 </div>
