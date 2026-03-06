@@ -77,8 +77,8 @@
   const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
 
   function dayDate(weekStart: string, dayIndex: number): string {
-    const d = new Date(weekStart + 'T00:00:00');
-    d.setDate(d.getDate() + dayIndex);
+    const d = new Date(weekStart + 'T00:00:00Z');
+    d.setUTCDate(d.getUTCDate() + dayIndex);
     return d.toISOString().slice(0, 10);
   }
 
