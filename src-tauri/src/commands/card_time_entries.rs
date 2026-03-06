@@ -20,6 +20,14 @@ pub struct CardTypeHours {
     pub hours: f64,
 }
 
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct DayTypeHours {
+    pub date: String,
+    pub card_type: String,
+    pub hours: f64,
+}
+
 fn row_to_card_time_entry(row: &rusqlite::Row) -> rusqlite::Result<CardTimeEntry> {
     Ok(CardTimeEntry {
         id: row.get(0)?,
@@ -149,6 +157,33 @@ pub(crate) fn db_list_card_entries_for_week(
     .map_err(|e| e.to_string())
 }
 
+pub(crate) fn db_list_day_entries_for_week(
+    db: &Connection,
+    week_id: i64,
+) -> Result<Vec<DayTypeHours>, String> {
+    let mut stmt = db
+        .prepare(
+            "SELECT cte.date, c.card_type, \
+             SUM((julianday(cte.end_time) - julianday(cte.start_time)) * 24.0) as hours \
+             FROM card_time_entries cte \
+             JOIN cards c ON c.id = cte.card_id \
+             WHERE c.week_id=? AND cte.end_time IS NOT NULL \
+             GROUP BY cte.date, c.card_type \
+             ORDER BY cte.date",
+        )
+        .map_err(|e| e.to_string())?;
+    stmt.query_map([week_id], |row| {
+        Ok(DayTypeHours {
+            date: row.get(0)?,
+            card_type: row.get(1)?,
+            hours: row.get(2)?,
+        })
+    })
+    .map_err(|e| e.to_string())?
+    .collect::<rusqlite::Result<Vec<_>>>()
+    .map_err(|e| e.to_string())
+}
+
 // ---------------------------------------------------------------------------
 // Tauri commands — thin wrappers that lock the mutex and delegate to helpers.
 // ---------------------------------------------------------------------------
@@ -203,6 +238,15 @@ pub fn list_card_entries_for_week(
 ) -> Result<Vec<CardTypeHours>, String> {
     let db = state.0.lock().map_err(|e| e.to_string())?;
     db_list_card_entries_for_week(&db, week_id)
+}
+
+#[tauri::command]
+pub fn list_day_entries_for_week(
+    week_id: i64,
+    state: State<DbState>,
+) -> Result<Vec<DayTypeHours>, String> {
+    let db = state.0.lock().map_err(|e| e.to_string())?;
+    db_list_day_entries_for_week(&db, week_id)
 }
 
 // ---------------------------------------------------------------------------
@@ -304,6 +348,47 @@ mod tests {
             (hours - 2.0).abs() < 0.001,
             "time_estimate must be approximately 2.0, got {hours}"
         );
+    }
+
+    #[test]
+    fn list_day_entries_for_week_groups_by_date_and_type() {
+        let db = open_test_db();
+
+        // Create a week
+        db.execute(
+            "INSERT INTO weeks (year, week_number, start_date) VALUES (2026, 10, '2026-03-02')",
+            [],
+        ).unwrap();
+        let week_id = db.last_insert_rowid();
+
+        // Create a task card in that week
+        db.execute(
+            "INSERT INTO cards (title, card_type, status, position, week_id, day_of_week) VALUES ('T1', 'task', 'planned', 0, ?, 1)",
+            [week_id],
+        ).unwrap();
+        let card_id = db.last_insert_rowid();
+
+        // Insert a 2h entry on Mon
+        db.execute(
+            "INSERT INTO card_time_entries (card_id, date, start_time, end_time) VALUES (?, '2026-03-02', '2026-03-02 09:00:00', '2026-03-02 11:00:00')",
+            [card_id],
+        ).unwrap();
+
+        // Insert a 1h entry on Tue (same card)
+        db.execute(
+            "INSERT INTO card_time_entries (card_id, date, start_time, end_time) VALUES (?, '2026-03-03', '2026-03-03 09:00:00', '2026-03-03 10:00:00')",
+            [card_id],
+        ).unwrap();
+
+        let rows = db_list_day_entries_for_week(&db, week_id).unwrap();
+        assert_eq!(rows.len(), 2, "should have two date+type rows");
+
+        let mon = rows.iter().find(|r| r.date == "2026-03-02").expect("Mon row");
+        assert_eq!(mon.card_type, "task");
+        assert!((mon.hours - 2.0).abs() < 0.001, "Mon should be 2h");
+
+        let tue = rows.iter().find(|r| r.date == "2026-03-03").expect("Tue row");
+        assert!((tue.hours - 1.0).abs() < 0.001, "Tue should be 1h");
     }
 
     // finalize_card_time with no entries must return Ok(()) without touching the card.

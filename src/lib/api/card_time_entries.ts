@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { CardTimeEntry, CardTypeHours } from '$lib/types';
+import type { CardTimeEntry, CardTypeHours, DayTypeHours } from '$lib/types';
 
 export async function cardClockIn(cardId: number, date: string): Promise<CardTimeEntry> {
   return invoke('card_clock_in', { cardId, date });
@@ -23,4 +23,8 @@ export async function finalizeCardTime(cardId: number): Promise<void> {
 
 export async function listCardEntriesForWeek(weekId: number): Promise<CardTypeHours[]> {
   return invoke('list_card_entries_for_week', { weekId });
+}
+
+export async function listDayEntriesForWeek(weekId: number): Promise<DayTypeHours[]> {
+  return invoke('list_day_entries_for_week', { weekId });
 }

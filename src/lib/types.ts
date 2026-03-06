@@ -96,3 +96,9 @@ export interface CardTypeHours {
   card_type: string;
   hours: number;
 }
+
+export interface DayTypeHours {
+  date: string;       // YYYY-MM-DD
+  card_type: string;
+  hours: number;
+}
