@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { extractFromTitle } from '../components/QuickAdd.svelte';
 
 /**
  * Extract the URL source detection logic for testing.
@@ -187,6 +188,75 @@ describe('QuickAdd URL Source Detection', () => {
     it('handles Slack URL with extra path segments', () => {
       const url = 'https://workspace.slack.com/archives/C1234567890/p1234567890123456/more/path';
       expect(detectSource(url)).toBe('Slack thread');
+    });
+  });
+});
+
+describe('extractFromTitle', () => {
+  describe('H:MM time format', () => {
+    it('parses 0:30 as 0.5h', () => {
+      const result = extractFromTitle('Fix login bug 0:30');
+      expect(result.timeEstimate).toBeCloseTo(0.5);
+      expect(result.cleanedTitle).toBe('Fix login bug');
+    });
+    it('parses 1:30 as 1.5h', () => {
+      const result = extractFromTitle('Deploy service 1:30');
+      expect(result.timeEstimate).toBeCloseTo(1.5);
+      expect(result.cleanedTitle).toBe('Deploy service');
+    });
+    it('parses 2:00 as 2h', () => {
+      const result = extractFromTitle('Write tests 2:00');
+      expect(result.timeEstimate).toBeCloseTo(2.0);
+      expect(result.cleanedTitle).toBe('Write tests');
+    });
+  });
+
+  describe('existing time formats still work', () => {
+    it('parses 1h', () => {
+      const result = extractFromTitle('Fix bug 1h');
+      expect(result.timeEstimate).toBe(1);
+      expect(result.cleanedTitle).toBe('Fix bug');
+    });
+    it('parses 30m', () => {
+      const result = extractFromTitle('Code review 30m');
+      expect(result.timeEstimate).toBeCloseTo(0.5);
+      expect(result.cleanedTitle).toBe('Code review');
+    });
+    it('parses 1.5h', () => {
+      const result = extractFromTitle('Planning 1.5h');
+      expect(result.timeEstimate).toBe(1.5);
+      expect(result.cleanedTitle).toBe('Planning');
+    });
+  });
+
+  describe('URL extraction', () => {
+    it('extracts URL from mixed input', () => {
+      const result = extractFromTitle('Fix login https://example.com 1h');
+      expect(result.url).toBe('https://example.com');
+      expect(result.timeEstimate).toBe(1);
+      expect(result.cleanedTitle).toBe('Fix login');
+    });
+  });
+
+  describe('priority extraction', () => {
+    it('extracts !high', () => {
+      const result = extractFromTitle('Important task !high');
+      expect(result.impact).toBe('high');
+      expect(result.cleanedTitle).toBe('Important task');
+    });
+    it('extracts !h shorthand', () => {
+      const result = extractFromTitle('Critical fix !h');
+      expect(result.impact).toBe('high');
+    });
+  });
+
+  describe('combined input', () => {
+    it('handles URL + time + priority together', () => {
+      const result = extractFromTitle('Fix bug https://gitlab.com/issue/1 0:30 !high');
+      expect(result.url).toBe('https://gitlab.com/issue/1');
+      expect(result.timeEstimate).toBeCloseTo(0.5);
+      expect(result.impact).toBe('high');
+      expect(result.cleanedTitle).toBe('Fix bug');
     });
   });
 });

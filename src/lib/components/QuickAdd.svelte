@@ -45,51 +45,6 @@
     return 'task';
   }
 
-  function extractFromTitle(title: string): {
-    cleanedTitle: string;
-    timeEstimate: number | null;
-    url: string | null;
-    impact: Impact | null;
-  } {
-    let cleaned = title;
-    let timeEstimate: number | null = null;
-    let extractedUrl: string | null = null;
-    let impact: Impact | null = null;
-
-    // Extract URL (http:// or https://)
-    const urlMatch = cleaned.match(/https?:\/\/\S+/);
-    if (urlMatch) {
-      extractedUrl = urlMatch[0];
-      cleaned = cleaned.replace(urlMatch[0], '').trim();
-    }
-
-    // Extract time (e.g., "1h", "30m", "1.5 hours", etc.)
-    const timeMatch = cleaned.match(/\b(\d+(?:\.\d+)?)\s*(h|hr|hrs?|hours?|m|min|mins?|minutes?)\b/i);
-    if (timeMatch) {
-      const value = parseFloat(timeMatch[1]);
-      const unit = timeMatch[2].toLowerCase();
-      if (unit === 'm' || unit === 'min' || unit === 'mins' || unit === 'minute' || unit === 'minutes') {
-        timeEstimate = value / 60;
-      } else {
-        timeEstimate = value;
-      }
-      cleaned = cleaned.replace(timeMatch[0], '').trim();
-    }
-
-    // Extract priority (!high, !mid, !low, !h, !m, !l)
-    const priorityMatch = cleaned.match(/!(high|mid|low|h|m|l)\b/i);
-    if (priorityMatch) {
-      const p = priorityMatch[1].toLowerCase();
-      if (p === 'h') impact = 'high';
-      else if (p === 'm') impact = 'mid';
-      else if (p === 'l') impact = 'low';
-      else impact = (p as Impact);
-      cleaned = cleaned.replace(priorityMatch[0], '').trim();
-    }
-
-    return { cleanedTitle: cleaned, timeEstimate, url: extractedUrl, impact };
-  }
-
   async function submit() {
     const trimmed = value.trim();
     if (!trimmed) return;
@@ -236,7 +191,7 @@
   <div class="flex flex-col gap-1">
     <input
       class="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded px-2 py-1.5 text-sm text-[var(--color-text)] placeholder:text-[var(--color-muted)] focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
-      placeholder="Card title or URL..."
+      placeholder="Title, URL, 1h or 0:30…"
       bind:value
       disabled={isLoading}
       oninput={handleInput}
@@ -264,5 +219,57 @@
 {/if}
 
 <script module lang="ts">
+  export function extractFromTitle(title: string): {
+    cleanedTitle: string;
+    timeEstimate: number | null;
+    url: string | null;
+    impact: Impact | null;
+  } {
+    let cleaned = title;
+    let timeEstimate: number | null = null;
+    let extractedUrl: string | null = null;
+    let impact: Impact | null = null;
+
+    // Extract URL (http:// or https://)
+    const urlMatch = cleaned.match(/https?:\/\/\S+/);
+    if (urlMatch) {
+      extractedUrl = urlMatch[0];
+      cleaned = cleaned.replace(urlMatch[0], '').trim();
+    }
+
+    // Try H:MM format first (e.g. 0:30, 1:30, 2:00)
+    const hmMatch = cleaned.match(/\b(\d+):(\d{2})\b/);
+    if (hmMatch) {
+      timeEstimate = parseInt(hmMatch[1]) + parseInt(hmMatch[2]) / 60;
+      cleaned = cleaned.replace(hmMatch[0], '').trim();
+    } else {
+      // Fall back to unit-based formats (1h, 30m, 1.5 hours, etc.)
+      const timeMatch = cleaned.match(/\b(\d+(?:\.\d+)?)\s*(h|hr|hrs?|hours?|m|min|mins?|minutes?)\b/i);
+      if (timeMatch) {
+        const val = parseFloat(timeMatch[1]);
+        const unit = timeMatch[2].toLowerCase();
+        if (unit === 'm' || unit === 'min' || unit === 'mins' || unit === 'minute' || unit === 'minutes') {
+          timeEstimate = val / 60;
+        } else {
+          timeEstimate = val;
+        }
+        cleaned = cleaned.replace(timeMatch[0], '').trim();
+      }
+    }
+
+    // Extract priority (!high, !mid, !low, !h, !m, !l)
+    const priorityMatch = cleaned.match(/!(high|mid|low|h|m|l)\b/i);
+    if (priorityMatch) {
+      const p = priorityMatch[1].toLowerCase();
+      if (p === 'h') impact = 'high';
+      else if (p === 'm') impact = 'mid';
+      else if (p === 'l') impact = 'low';
+      else impact = (p as Impact);
+      cleaned = cleaned.replace(priorityMatch[0], '').trim();
+    }
+
+    return { cleanedTitle: cleaned, timeEstimate, url: extractedUrl, impact };
+  }
+
   function focus(node: HTMLElement) { node.focus(); }
 </script>
