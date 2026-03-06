@@ -1,3 +1,7 @@
+<script module lang="ts">
+  function focusOnMount(node: HTMLElement) { node.focus(); }
+</script>
+
 <script lang="ts">
   import type { Card, CardType, Impact } from '$lib/types';
   import { boardStore } from '$lib/stores/board.svelte';
@@ -50,6 +54,7 @@
   let popoverUrl = $state('');
   let popoverNotes = $state('');
   let popoverProjectId = $state<number | null>(null);
+  let popoverTitle = $state('');
   let saveError = $state<string | null>(null);
 
   // Initialize and re-sync whenever the card prop changes
@@ -60,6 +65,15 @@
     popoverUrl = card.url ?? '';
     popoverNotes = card.notes ?? '';
     popoverProjectId = card.project_id ?? null;
+    popoverTitle = card.title;
+  });
+
+  const modalDescription = $derived.by(() => {
+    if (!card.metadata) return null;
+    try {
+      const m = JSON.parse(card.metadata) as Record<string, unknown>;
+      return (m.ai_description as string) ?? null;
+    } catch { return null; }
   });
 
   // Load projects if not already loaded
@@ -116,6 +130,26 @@
     </div>
 
     <div class="flex flex-col gap-2">
+      <!-- Title -->
+      <div>
+        <label for="modal-title" class="text-xs text-[var(--color-muted)] block mb-1">Title</label>
+        <input
+          id="modal-title"
+          type="text"
+          bind:value={popoverTitle}
+          use:focusOnMount
+          class="w-full text-sm bg-[var(--color-surface)] border border-[var(--color-border)] rounded px-2 py-1 text-[var(--color-text)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+          onblur={() => { if (popoverTitle.trim() && popoverTitle.trim() !== card.title) savePopoverField({ title: popoverTitle.trim() }); }}
+          onkeydown={(e) => { if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur(); if (e.key === 'Escape') onClose(); }}
+        />
+      </div>
+
+      {#if modalDescription}
+        <div class="text-xs text-[var(--color-text-muted)] bg-[var(--color-surface)] rounded px-2 py-1.5 leading-snug border border-[var(--color-border)]/50">
+          {modalDescription}
+        </div>
+      {/if}
+
       <!-- Type selector -->
       <div>
         <!-- svelte-ignore a11y_label_has_associated_control -->
