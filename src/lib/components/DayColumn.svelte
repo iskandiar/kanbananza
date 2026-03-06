@@ -89,6 +89,7 @@
   let addingEntry = $state(false);
   let newEntryStart = $state('');
   let newEntryEnd = $state('');
+  let addError = $state<string | null>(null);
 
   // Today's date in YYYY-MM-DD format
   const todayDate = new Date().toISOString().slice(0, 10);
@@ -168,19 +169,21 @@
 
   async function handleAddManualEntry() {
     if (!newEntryStart) return;
+    addError = null;
     const startUtc = toUtcDatetime(newEntryStart);
     const endUtc = newEntryEnd ? toUtcDatetime(newEntryEnd) : undefined;
-    const entry = await timeApi.clockIn(date);
+    let entry: TimeEntry | undefined;
     try {
+      entry = await timeApi.clockIn(date);
       await timeApi.updateTimeEntry(entry.id, startUtc, endUtc, undefined);
+      entries = await timeApi.listTimeEntries(date);
+      addingEntry = false;
+      newEntryStart = '';
+      newEntryEnd = '';
     } catch (e) {
-      await timeApi.deleteTimeEntry(entry.id);
-      throw e;
+      if (entry) await timeApi.deleteTimeEntry(entry.id).catch(() => {});
+      addError = e instanceof Error ? e.message : String(e);
     }
-    entries = await timeApi.listTimeEntries(date);
-    addingEntry = false;
-    newEntryStart = '';
-    newEntryEnd = '';
   }
 
   function totalLoggedHours(): number {
@@ -301,10 +304,13 @@
                 class="ml-auto text-[0.6rem] px-1 py-px rounded bg-[var(--color-accent)]/10 text-[var(--color-accent)] hover:bg-[var(--color-accent)]/20 disabled:opacity-40 transition-colors"
               >Save</button>
               <button
-                onclick={() => { addingEntry = false; newEntryStart = ''; newEntryEnd = ''; }}
+                onclick={() => { addingEntry = false; newEntryStart = ''; newEntryEnd = ''; addError = null; }}
                 class="text-[var(--color-muted)] hover:text-[var(--color-text)] transition-colors text-xs"
               >×</button>
             </div>
+            {#if addError}
+              <p class="text-[0.6rem] text-rose-400 mt-0.5">{addError}</p>
+            {/if}
           {:else}
             <button
               onclick={() => (addingEntry = true)}
