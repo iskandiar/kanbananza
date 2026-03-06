@@ -293,19 +293,21 @@
           <span class="text-xs text-[var(--color-muted)]">{totalCardClocked.toFixed(1)}h clocked</span>
         {/if}
       {/if}
+
+      <!-- URL link (always visible) -->
+      {#if card.url}
+        <button
+          data-no-dnd="true"
+          onclick={(e) => { e.stopPropagation(); openUrl(card.url!); }}
+          class="text-[var(--color-muted)] hover:text-[var(--color-accent)] transition-colors"
+          aria-label="Open link"
+          title="Open link"
+        ><ExternalLink size={10} /></button>
+      {/if}
     </div>
 
     {#if !isPopoverOpen}
       <div class="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity mt-0.5">
-        {#if card.url}
-          <button
-            data-no-dnd="true"
-            onclick={(e) => { e.stopPropagation(); if (card.url) openUrl(card.url); }}
-            class="text-[var(--color-muted)] hover:text-[var(--color-accent-hover)] transition-colors"
-            aria-label="Open link"
-            title="Open link"
-          ><ExternalLink size={12} /></button>
-        {/if}
         <button
           data-no-dnd="true"
           onclick={(e) => { e.stopPropagation(); boardStore.duplicateCard(card.id); }}
