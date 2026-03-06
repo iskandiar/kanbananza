@@ -90,6 +90,7 @@
   let newEntryStart = $state('');
   let newEntryEnd = $state('');
   let addError = $state<string | null>(null);
+  let confirmingEntryId = $state<number | null>(null);
 
   // Today's date in YYYY-MM-DD format
   const todayDate = new Date().toISOString().slice(0, 10);
@@ -146,7 +147,7 @@
 
   async function handleDeleteEntry(id: number) {
     await timeApi.deleteTimeEntry(id);
-    entries = await timeApi.listTimeEntries(todayDate);
+    entries = await timeApi.listTimeEntries(date);
     if (activeEntry?.id === id) {
       activeEntry = null;
       elapsedSeconds = 0;
@@ -279,6 +280,24 @@
                 <button
                   onclick={() => handleDeleteEntry(entry.id)}
                   class="ml-auto text-red-400/50 hover:text-red-400 transition-colors"
+                >×</button>
+              {:else if confirmingEntryId === entry.id}
+                <span class="ml-auto text-[0.6rem] text-rose-400">Delete?</span>
+                <button
+                  onclick={() => { handleDeleteEntry(entry.id); confirmingEntryId = null; }}
+                  class="text-rose-400 hover:text-rose-300 transition-colors text-xs leading-none"
+                  title="Confirm delete"
+                >✓</button>
+                <button
+                  onclick={() => (confirmingEntryId = null)}
+                  class="text-[var(--color-muted)] hover:text-[var(--color-text)] transition-colors text-xs leading-none"
+                  title="Cancel"
+                >×</button>
+              {:else}
+                <button
+                  onclick={() => (confirmingEntryId = entry.id)}
+                  class="ml-auto text-red-400/50 hover:text-red-400 transition-colors"
+                  title="Delete entry"
                 >×</button>
               {/if}
             </div>
