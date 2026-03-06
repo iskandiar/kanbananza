@@ -132,15 +132,15 @@
   });
 
   async function handleClockIn() {
-    activeEntry = await timeApi.clockIn(todayDate);
-    entries = await timeApi.listTimeEntries(todayDate);
+    activeEntry = await timeApi.clockIn(date);
+    entries = await timeApi.listTimeEntries(date);
     elapsedSeconds = 0;
   }
 
   async function handleClockOut() {
     if (!activeEntry) return;
     activeEntry = await timeApi.clockOut(activeEntry.id);
-    entries = await timeApi.listTimeEntries(todayDate);
+    entries = await timeApi.listTimeEntries(date);
     activeEntry = null;
     elapsedSeconds = 0;
   }
