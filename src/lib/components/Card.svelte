@@ -24,7 +24,7 @@
   import { openUrl } from '$lib/api/shell';
   import { hoursToHHMM } from '$lib/utils';
   import * as cardTimeApi from '$lib/api/card_time_entries';
-  import { Pencil, ExternalLink, Trash2, Check, Users, GitPullRequest, MessageSquare, ListTodo, Eye, FileText, X, GripVertical } from 'lucide-svelte';
+  import { ExternalLink, Trash2, Check, Users, GitPullRequest, MessageSquare, ListTodo, Eye, FileText, X, GripVertical } from 'lucide-svelte';
   import EditCardModal from './EditCardModal.svelte';
 
   let {
@@ -170,32 +170,9 @@
   }
 
   // Editing state
-  let isTitleEditing = $state(false);
-  let editTitle = $state('');
   let isPopoverOpen = $state(false);
   let confirmingDelete = $state(false);
   let saveError = $state<string | null>(null);
-
-  function startTitleEdit() {
-    editTitle = card.title;
-    isTitleEditing = true;
-  }
-
-  function cancelTitleEdit() {
-    isTitleEditing = false;
-  }
-
-  async function saveTitleEdit() {
-    if (editTitle !== card.title) {
-      try {
-        await boardStore.updateCard(card.id, { title: editTitle });
-        saveError = null;
-      } catch (e) {
-        saveError = e instanceof Error ? e.message : String(e);
-      }
-    }
-    isTitleEditing = false;
-  }
 
   function openPopover() {
     isPopoverOpen = true;
@@ -217,10 +194,6 @@
     }
   }
 
-  function focus(node: HTMLElement) {
-    node.focus();
-  }
-
   async function handleToggleDone() {
     if (card.status !== 'done') {
       if (activeCardEntry) await handleCardClockOut();
@@ -238,9 +211,9 @@
   class="glass-card group relative flex flex-row gap-2 items-start rounded-md border border-[var(--color-glass-border)] bg-[var(--color-glass-bg)] px-3 hover:border-[var(--color-accent)]/40 hover:bg-[var(--color-glass-bg-raised)] backdrop-blur-sm transition-colors"
   class:py-2={card.card_type !== 'meeting'}
   class:py-1={card.card_type === 'meeting'}
-  class:cursor-grab={!isTitleEditing && !isPopoverOpen}
-  class:active:cursor-grabbing={!isTitleEditing && !isPopoverOpen}
-  class:cursor-default={isTitleEditing || isPopoverOpen}
+  class:cursor-grab={!isPopoverOpen}
+  class:active:cursor-grabbing={!isPopoverOpen}
+  class:cursor-default={isPopoverOpen}
   class:opacity-40={card.status === 'done'}
   role="article"
 >
@@ -252,49 +225,24 @@
       aria-label={card.status === 'done' ? 'Undo done' : 'Mark done'}
     >{#if card.status === 'done'}<Check size={10} />{/if}</button>
 
-    {#if !isTitleEditing && !isPopoverOpen}
+    {#if !isPopoverOpen}
       <div class="text-[var(--color-muted)] opacity-30 group-hover:opacity-70 cursor-grab mt-auto">
         <GripVertical size={14} />
       </div>
     {/if}
   </div>
 
-  <div class="flex-1 min-w-0">
+  <!-- svelte-ignore a11y_click_events_have_key_events -->
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div
+    class="flex-1 min-w-0 cursor-pointer"
+    onclick={openPopover}
+  >
     {#if meetingTime}
       <span class="text-xs text-[var(--color-muted)] mb-1 block">{meetingTime}</span>
     {/if}
 
-    {#if isTitleEditing}
-      <input
-        type="text"
-        bind:value={editTitle}
-        use:focus
-        class="w-full text-sm font-medium text-[var(--color-text)] bg-transparent border-0 border-b-2 border-[var(--color-accent)] px-0 py-0 focus:outline-none focus:ring-0"
-        onkeydown={(e) => { if (e.key === 'Enter') saveTitleEdit(); if (e.key === 'Escape') cancelTitleEdit(); }}
-        onblur={saveTitleEdit}
-      />
-    {:else}
-      <!-- svelte-ignore a11y_click_events_have_key_events -->
-      <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-      <p
-        class="text-sm font-medium text-[var(--color-text)] leading-snug cursor-text hover:text-[var(--color-accent)]/80 transition-colors"
-        onclick={startTitleEdit}
-        onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') startTitleEdit(); }}
-        title="Click to edit title"
-      >{card.title}</p>
-    {/if}
-
-    {#if aiFields.description && card.card_type !== 'meeting' && !isTitleEditing && !isPopoverOpen}
-      <p
-        data-no-dnd="true"
-        class="text-xs text-[var(--color-text-muted)] leading-snug mt-1 line-clamp-2 group-hover:line-clamp-none transition-all cursor-default"
-        title={aiFields.description}
-      >{aiFields.description}</p>
-    {/if}
-
-    {#if card.notes && card.card_type !== 'meeting' && !isTitleEditing && !isPopoverOpen}
-      <p class="text-xs text-[var(--color-text-muted)] leading-snug mt-1 line-clamp-2 group-hover:line-clamp-none transition-all cursor-default">{card.notes}</p>
-    {/if}
+    <p class="text-sm font-medium text-[var(--color-text)] leading-snug">{card.title}</p>
 
     <div class="mt-1.5 flex items-center gap-1.5 flex-wrap">
       <!-- Project slug badge -->
@@ -344,7 +292,7 @@
       {/if}
     </div>
 
-    {#if !isTitleEditing && !isPopoverOpen}
+    {#if !isPopoverOpen}
       <div class="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity mt-0.5">
         {#if card.url}
           <button
@@ -357,14 +305,7 @@
         {/if}
         <button
           data-no-dnd="true"
-          onclick={openPopover}
-          class="text-[var(--color-muted)] hover:text-[var(--color-accent-hover)] transition-colors"
-          aria-label="Edit card"
-          title="Edit card"
-        ><Pencil size={12} /></button>
-        <button
-          data-no-dnd="true"
-          onclick={() => boardStore.duplicateCard(card.id)}
+          onclick={(e) => { e.stopPropagation(); boardStore.duplicateCard(card.id); }}
           class="text-[var(--color-muted)] hover:text-[var(--color-accent-hover)] transition-colors text-xs leading-none"
           aria-label="Duplicate card"
           title="Duplicate card"
@@ -373,14 +314,14 @@
           {#if activeCardEntry}
             <button
               data-no-dnd="true"
-              onclick={handleCardClockOut}
+              onclick={(e) => { e.stopPropagation(); handleCardClockOut(); }}
               class="text-red-300 hover:text-red-200 transition-colors text-xs leading-none"
               title="Pause timer"
             >⏸</button>
           {:else}
             <button
               data-no-dnd="true"
-              onclick={handleCardClockIn}
+              onclick={(e) => { e.stopPropagation(); handleCardClockIn(); }}
               class="text-[var(--color-muted)] hover:text-[var(--color-accent)] transition-colors text-xs leading-none"
               title="Start timer"
             >▶</button>
@@ -389,7 +330,7 @@
         {#if onMoveToNextWeek}
           <button
             data-no-dnd="true"
-            onclick={() => onMoveToNextWeek!(card.id)}
+            onclick={(e) => { e.stopPropagation(); onMoveToNextWeek!(card.id); }}
             class="text-[var(--color-muted)] hover:text-[var(--color-accent-hover)] transition-colors text-xs leading-none"
             aria-label="Move to next week"
             title="Move to next week"
@@ -398,7 +339,7 @@
         {#if onScheduleToday}
           <button
             data-no-dnd="true"
-            onclick={() => onScheduleToday!(card.id)}
+            onclick={(e) => { e.stopPropagation(); onScheduleToday!(card.id); }}
             class="text-[var(--color-muted)] hover:text-[var(--color-accent-hover)] transition-colors text-xs leading-none whitespace-nowrap"
             aria-label="Schedule for today"
             title="Schedule for today"
@@ -407,7 +348,7 @@
         {#if !confirmingDelete}
           <button
             data-no-dnd="true"
-            onclick={() => (confirmingDelete = true)}
+            onclick={(e) => { e.stopPropagation(); confirmingDelete = true; }}
             class="text-[var(--color-muted)] hover:text-rose-400 transition-colors"
             aria-label="Delete card"
             title="Delete card"
@@ -416,13 +357,13 @@
           <span class="text-xs text-rose-400">Delete?</span>
           <button
             data-no-dnd="true"
-            onclick={cancelDelete}
+            onclick={(e) => { e.stopPropagation(); cancelDelete(); }}
             class="text-[var(--color-muted)] hover:text-[var(--color-text)] transition-colors"
             aria-label="Cancel delete"
           ><X size={12} /></button>
           <button
             data-no-dnd="true"
-            onclick={deleteCard}
+            onclick={(e) => { e.stopPropagation(); deleteCard(); }}
             class="text-rose-400 hover:text-rose-300 transition-colors"
             aria-label="Confirm delete"
           ><Check size={12} /></button>
