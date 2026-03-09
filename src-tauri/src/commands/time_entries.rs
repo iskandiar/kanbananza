@@ -41,6 +41,28 @@ pub fn clock_in(date: String, state: State<DbState>) -> Result<TimeEntry, String
 }
 
 #[tauri::command]
+pub fn create_manual_time_entry(
+    date: String,
+    start_time: String,
+    end_time: Option<String>,
+    state: State<DbState>,
+) -> Result<TimeEntry, String> {
+    let db = state.0.lock().map_err(|e| e.to_string())?;
+    db.execute(
+        "INSERT INTO time_entries (date, start_time, end_time) VALUES (?, ?, ?)",
+        rusqlite::params![date, start_time, end_time],
+    )
+    .map_err(|e| e.to_string())?;
+    let id = db.last_insert_rowid();
+    db.query_row(
+        "SELECT id, date, start_time, end_time, notes, created_at FROM time_entries WHERE id=?",
+        [id],
+        row_to_time_entry,
+    )
+    .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub fn clock_out(entry_id: i64, state: State<DbState>) -> Result<TimeEntry, String> {
     let db = state.0.lock().map_err(|e| e.to_string())?;
     db.execute(
@@ -115,4 +137,37 @@ pub fn delete_time_entry(id: i64, state: State<DbState>) -> Result<(), String> {
     db.execute("DELETE FROM time_entries WHERE id=?", [id])
         .map_err(|e| e.to_string())?;
     Ok(())
+}
+
+#[derive(serde::Serialize)]
+pub struct DayTimeEntry {
+    pub date: String,
+    pub start_time: String,
+    pub end_time: Option<String>,
+}
+
+#[tauri::command]
+pub fn list_time_entries_for_week(
+    week_start: String,
+    state: State<DbState>,
+) -> Result<Vec<DayTimeEntry>, String> {
+    let db = state.0.lock().map_err(|e| e.to_string())?;
+    let mut stmt = db
+        .prepare(
+            "SELECT date, start_time, end_time \
+             FROM time_entries \
+             WHERE date >= ? AND date <= date(?, '+4 days') \
+             ORDER BY date, start_time",
+        )
+        .map_err(|e| e.to_string())?;
+    stmt.query_map(rusqlite::params![week_start, week_start], |row| {
+        Ok(DayTimeEntry {
+            date: row.get(0)?,
+            start_time: row.get(1)?,
+            end_time: row.get(2)?,
+        })
+    })
+    .map_err(|e| e.to_string())?
+    .collect::<rusqlite::Result<Vec<_>>>()
+    .map_err(|e| e.to_string())
 }

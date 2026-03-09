@@ -30,7 +30,7 @@ use commands::{
         card_clock_in, card_clock_out, get_active_card_entry, list_card_time_entries,
         finalize_card_time, list_card_entries_for_week, list_day_entries_for_week,
     },
-    time_entries::{clock_in, clock_out, list_time_entries, update_time_entry, delete_time_entry},
+    time_entries::{clock_in, clock_out, list_time_entries, update_time_entry, delete_time_entry, create_manual_time_entry, list_time_entries_for_week},
     weeks::*,
 };
 use db::DbState;
@@ -194,6 +194,8 @@ pub fn run() {
             list_time_entries,
             update_time_entry,
             delete_time_entry,
+            create_manual_time_entry,
+            list_time_entries_for_week,
             // Card time entries
             card_clock_in,
             card_clock_out,
