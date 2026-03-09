@@ -5,6 +5,7 @@
   import { summariseWeek } from '$lib/api/ai';
   import { listCardsByWeek } from '$lib/api/cards';
   import { listCardEntriesForWeek, listDayEntriesForWeek } from '$lib/api/card_time_entries';
+  import { listTimeEntriesForWeek, type DayTimeEntry } from '$lib/api/time_entries';
   import { formatDateRange } from '$lib/utils';
   import { toastStore } from '$lib/stores/toast.svelte';
   import KLogo from '$lib/components/KLogo.svelte';
@@ -16,6 +17,7 @@
     summarising: boolean;
     clockedBreakdown: CardTypeHours[];
     dayBreakdown: DayTypeHours[];
+    sessionEntries: DayTimeEntry[];
   };
 
   let weeks = $state<WeekRow[]>([]);
@@ -27,12 +29,13 @@
       const raw: Week[] = await invoke('list_weeks');
       const rows = await Promise.all(
         raw.map(async (w) => {
-          const [cards, clockedBreakdown, dayBreakdown] = await Promise.all([
+          const [cards, clockedBreakdown, dayBreakdown, sessionEntries] = await Promise.all([
             listCardsByWeek(w.id),
             listCardEntriesForWeek(w.id),
             listDayEntriesForWeek(w.id),
+            listTimeEntriesForWeek(w.start_date),
           ]);
-          return { ...w, cardCount: cards.length, summarising: false, clockedBreakdown, dayBreakdown };
+          return { ...w, cardCount: cards.length, summarising: false, clockedBreakdown, dayBreakdown, sessionEntries };
         })
       );
       weeks = rows;
@@ -88,20 +91,73 @@
     date: string;
     hours: number;
     segments: { card_type: string; hours: number; color: string }[];
+    sessionLabel: string;
   };
 
-  function buildDayBars(weekStart: string, dayBreakdown: DayTypeHours[]): DayBar[] {
+  function toLocalHHMM(utcDatetime: string): string {
+    const d = new Date(utcDatetime.replace(' ', 'T') + 'Z');
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+  }
+
+  function buildDayBars(weekStart: string, dayBreakdown: DayTypeHours[], sessionEntries: DayTimeEntry[]): DayBar[] {
+    const today = new Date().toISOString().slice(0, 10);
     return DAY_LABELS.map((label, i) => {
       const date = dayDate(weekStart, i);
-      const entries = dayBreakdown.filter(d => d.date === date);
+      const isFuture = date > today;
+      const entries = isFuture ? [] : dayBreakdown.filter(d => d.date === date);
       const hours = entries.reduce((s, e) => s + e.hours, 0);
+      const daySessions = sessionEntries.filter(s => s.date === date && s.end_time !== null);
+      let sessionLabel = '–';
+      if (daySessions.length > 0) {
+        const first = toLocalHHMM(daySessions[0].start_time);
+        const last = toLocalHHMM(daySessions[daySessions.length - 1].end_time!);
+        sessionLabel = `${first}–${last}`;
+      }
       return {
         label,
         date,
         hours,
         segments: entries.map(e => ({ card_type: e.card_type, hours: e.hours, color: typeColor(e.card_type) })),
+        sessionLabel,
       };
     });
+  }
+
+  type PieSlice = { label: string; hours: number; pct: number; color: string; startAngle: number; endAngle: number };
+
+  function buildPieSlices(breakdown: CardTypeHours[]): PieSlice[] {
+    const total = breakdown.reduce((s, b) => s + b.hours, 0);
+    if (total === 0) return [];
+    const threshold = total * 0.08;
+    const main = breakdown.filter(b => b.hours >= threshold);
+    const otherHours = breakdown.filter(b => b.hours < threshold).reduce((s, b) => s + b.hours, 0);
+    const items: { label: string; hours: number; color: string }[] = [
+      ...main.map(b => ({ label: b.card_type, hours: b.hours, color: typeColor(b.card_type) })),
+      ...(otherHours > 0 ? [{ label: 'other', hours: otherHours, color: '#6b7280' }] : []),
+    ];
+    let angle = -Math.PI / 2;
+    return items.map(item => {
+      const sweep = (item.hours / total) * 2 * Math.PI;
+      const slice: PieSlice = {
+        label: item.label,
+        hours: item.hours,
+        pct: Math.round((item.hours / total) * 100),
+        color: item.color,
+        startAngle: angle,
+        endAngle: angle + sweep,
+      };
+      angle += sweep;
+      return slice;
+    });
+  }
+
+  function pieArcPath(cx: number, cy: number, r: number, startAngle: number, endAngle: number): string {
+    const x1 = cx + r * Math.cos(startAngle);
+    const y1 = cy + r * Math.sin(startAngle);
+    const x2 = cx + r * Math.cos(endAngle);
+    const y2 = cy + r * Math.sin(endAngle);
+    const largeArc = endAngle - startAngle > Math.PI ? 1 : 0;
+    return `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2} Z`;
   }
 
   const availableHours = $derived(Math.max(1, settingsStore.availableHours ?? 8));
@@ -136,7 +192,7 @@
     {:else}
       <div class="flex flex-col gap-0">
         {#each weeks as week (week.id)}
-          {@const dayBars = buildDayBars(week.start_date, week.dayBreakdown)}
+          {@const dayBars = buildDayBars(week.start_date, week.dayBreakdown, week.sessionEntries)}
           {@const BAR_HEIGHT = 56}
           {@const maxOverflowH = Math.min(28, Math.max(0, ...dayBars.map(d => d.hours > availableHours ? Math.round(((d.hours - availableHours) / availableHours) * BAR_HEIGHT) : 0)))}
           <div class="py-5 border-b border-[var(--color-border)]">
@@ -199,7 +255,7 @@
                   </div>
                   <!-- Hours label -->
                   <p class="text-[0.6rem] tabular-nums text-[var(--color-text-muted)]">
-                    {day.hours > 0 ? day.hours.toFixed(1) + 'h' : '–'}
+                    {day.sessionLabel}
                   </p>
                   <!-- Day label -->
                   <p class="text-[0.6rem] text-[var(--color-muted)] uppercase tracking-wide">{day.label}</p>
@@ -207,16 +263,34 @@
               {/each}
             </div>
 
-            <!-- Legend -->
+            <!-- Pie chart + legend -->
             {#if week.clockedBreakdown.length > 0}
-              <div class="flex items-center gap-3 mt-2 flex-wrap">
-                {#each week.clockedBreakdown as b (b.card_type)}
-                  <span class="text-[0.6rem] text-[var(--color-text-muted)] flex items-center gap-1">
-                    <span class="inline-block w-2 h-2 rounded-sm" style="background: {typeColor(b.card_type)}"></span>
-                    {b.card_type}
-                  </span>
-                {/each}
-              </div>
+              {@const slices = buildPieSlices(week.clockedBreakdown)}
+              {@const total = week.clockedBreakdown.reduce((s, b) => s + b.hours, 0)}
+              {#if slices.length > 0}
+                <div class="flex items-center gap-4 mt-3">
+                  <svg width="80" height="80" viewBox="0 0 80 80" class="shrink-0">
+                    {#each slices as slice (slice.label)}
+                      <path
+                        d={pieArcPath(40, 40, 36, slice.startAngle, slice.endAngle)}
+                        fill={slice.color}
+                        opacity="0.85"
+                      />
+                    {/each}
+                    <circle cx="40" cy="40" r="18" fill="var(--color-background)" />
+                    <text x="40" y="44" text-anchor="middle" fill="var(--color-text-muted)" font-size="8">{total.toFixed(1)}h</text>
+                  </svg>
+                  <div class="flex flex-col gap-1">
+                    {#each slices as slice (slice.label)}
+                      <span class="text-[0.6rem] text-[var(--color-text-muted)] flex items-center gap-1.5">
+                        <span class="inline-block w-2 h-2 rounded-sm shrink-0" style="background: {slice.color}"></span>
+                        <span class="capitalize">{slice.label}</span>
+                        <span class="tabular-nums text-[var(--color-muted)]">{slice.hours.toFixed(1)}h · {slice.pct}%</span>
+                      </span>
+                    {/each}
+                  </div>
+                </div>
+              {/if}
             {/if}
           </div>
         {/each}
