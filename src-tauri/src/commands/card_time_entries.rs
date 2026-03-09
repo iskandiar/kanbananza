@@ -139,14 +139,28 @@ pub(crate) fn db_list_card_entries_for_week(
 ) -> Result<Vec<CardTypeHours>, String> {
     let mut stmt = db
         .prepare(
-            "SELECT c.card_type, SUM((julianday(cte.end_time) - julianday(cte.start_time)) * 24.0) as hours \
-             FROM card_time_entries cte \
-             JOIN cards c ON c.id = cte.card_id \
-             WHERE c.week_id=? AND cte.end_time IS NOT NULL \
-             GROUP BY c.card_type",
+            "SELECT card_type, SUM(hours) as hours \
+             FROM ( \
+               SELECT c.card_type, \
+                      SUM((julianday(cte.end_time) - julianday(cte.start_time)) * 24.0) as hours \
+               FROM card_time_entries cte \
+               JOIN cards c ON c.id = cte.card_id \
+               WHERE c.week_id=? AND cte.end_time IS NOT NULL AND c.deleted_at IS NULL \
+               GROUP BY c.card_type, c.id \
+               UNION ALL \
+               SELECT c.card_type, c.time_estimate as hours \
+               FROM cards c \
+               WHERE c.week_id=? \
+                 AND c.time_estimate IS NOT NULL AND c.time_estimate > 0 \
+                 AND c.deleted_at IS NULL \
+                 AND c.id NOT IN ( \
+                   SELECT DISTINCT card_id FROM card_time_entries WHERE end_time IS NOT NULL \
+                 ) \
+             ) \
+             GROUP BY card_type",
         )
         .map_err(|e| e.to_string())?;
-    stmt.query_map([week_id], |row| {
+    stmt.query_map(rusqlite::params![week_id, week_id], |row| {
         Ok(CardTypeHours {
             card_type: row.get(0)?,
             hours: row.get(1)?,
@@ -163,16 +177,33 @@ pub(crate) fn db_list_day_entries_for_week(
 ) -> Result<Vec<DayTypeHours>, String> {
     let mut stmt = db
         .prepare(
-            "SELECT cte.date, c.card_type, \
-             SUM((julianday(cte.end_time) - julianday(cte.start_time)) * 24.0) as hours \
-             FROM card_time_entries cte \
-             JOIN cards c ON c.id = cte.card_id \
-             WHERE c.week_id=? AND cte.end_time IS NOT NULL \
-             GROUP BY cte.date, c.card_type \
-             ORDER BY cte.date",
+            "SELECT date, card_type, SUM(hours) as hours \
+             FROM ( \
+               SELECT cte.date, c.card_type, \
+                      SUM((julianday(cte.end_time) - julianday(cte.start_time)) * 24.0) as hours \
+               FROM card_time_entries cte \
+               JOIN cards c ON c.id = cte.card_id \
+               WHERE c.week_id=? AND cte.end_time IS NOT NULL AND c.deleted_at IS NULL \
+               GROUP BY cte.date, c.card_type, c.id \
+               UNION ALL \
+               SELECT date(w.start_date, '+' || (c.day_of_week - 1) || ' days') as date, \
+                      c.card_type, \
+                      c.time_estimate as hours \
+               FROM cards c \
+               JOIN weeks w ON w.id = c.week_id \
+               WHERE c.week_id=? \
+                 AND c.time_estimate IS NOT NULL AND c.time_estimate > 0 \
+                 AND c.day_of_week IS NOT NULL AND c.day_of_week BETWEEN 1 AND 5 \
+                 AND c.deleted_at IS NULL \
+                 AND c.id NOT IN ( \
+                   SELECT DISTINCT card_id FROM card_time_entries WHERE end_time IS NOT NULL \
+                 ) \
+             ) \
+             GROUP BY date, card_type \
+             ORDER BY date",
         )
         .map_err(|e| e.to_string())?;
-    stmt.query_map([week_id], |row| {
+    stmt.query_map(rusqlite::params![week_id, week_id], |row| {
         Ok(DayTypeHours {
             date: row.get(0)?,
             card_type: row.get(1)?,
@@ -410,6 +441,77 @@ mod tests {
         assert!(
             time_estimate.is_none(),
             "time_estimate must remain NULL when there are no entries"
+        );
+    }
+
+    // When a card has a time_estimate but no completed clock entries, the
+    // estimate must appear in the day-entries result on the card's scheduled date.
+    #[test]
+    fn estimate_used_when_no_clock_entries() {
+        let db = open_test_db();
+
+        db.execute(
+            "INSERT INTO weeks (year, week_number, start_date) VALUES (2026, 11, '2026-03-02')",
+            [],
+        )
+        .unwrap();
+        let week_id = db.last_insert_rowid();
+
+        db.execute(
+            "INSERT INTO cards (title, card_type, status, position, week_id, day_of_week, time_estimate) \
+             VALUES ('Est', 'task', 'planned', 0, ?, 1, 2.0)",
+            [week_id],
+        )
+        .unwrap();
+
+        let rows = db_list_day_entries_for_week(&db, week_id).unwrap();
+        assert_eq!(rows.len(), 1, "should have exactly one row from the estimate fallback");
+        let row = &rows[0];
+        assert_eq!(row.date, "2026-03-02", "date must be the Monday derived from day_of_week=1");
+        assert_eq!(row.card_type, "task");
+        assert!(
+            (row.hours - 2.0).abs() < 0.001,
+            "hours must equal time_estimate=2.0, got {}",
+            row.hours
+        );
+    }
+
+    // When a card has both a time_estimate and a completed clock entry, only the
+    // clocked hours must appear — the estimate fallback must be suppressed.
+    #[test]
+    fn clock_entries_take_priority_over_estimate() {
+        let db = open_test_db();
+
+        db.execute(
+            "INSERT INTO weeks (year, week_number, start_date) VALUES (2026, 12, '2026-03-09')",
+            [],
+        )
+        .unwrap();
+        let week_id = db.last_insert_rowid();
+
+        db.execute(
+            "INSERT INTO cards (title, card_type, status, position, week_id, day_of_week, time_estimate) \
+             VALUES ('Pri', 'task', 'planned', 0, ?, 1, 2.0)",
+            [week_id],
+        )
+        .unwrap();
+        let card_id = db.last_insert_rowid();
+
+        // Completed 1-hour clock entry for this card.
+        db.execute(
+            "INSERT INTO card_time_entries (card_id, date, start_time, end_time) \
+             VALUES (?, '2026-03-09', '2026-03-09 09:00:00', '2026-03-09 10:00:00')",
+            [card_id],
+        )
+        .unwrap();
+
+        let rows = db_list_day_entries_for_week(&db, week_id).unwrap();
+        assert_eq!(rows.len(), 1, "should have exactly one row (clocked entry only)");
+        let row = &rows[0];
+        assert!(
+            (row.hours - 1.0).abs() < 0.001,
+            "hours must be the clocked 1.0, not the estimate 2.0; got {}",
+            row.hours
         );
     }
 }
