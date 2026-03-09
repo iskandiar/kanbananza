@@ -9,6 +9,7 @@
   import { toastStore } from '$lib/stores/toast.svelte';
   import KLogo from '$lib/components/KLogo.svelte';
   import { themeStore } from '$lib/stores/theme.svelte';
+  import { settingsStore } from '$lib/stores/settings.svelte';
 
   type WeekRow = Week & {
     cardCount: number;
@@ -102,6 +103,8 @@
       };
     });
   }
+
+  const availableHours = $derived(Math.max(1, settingsStore.availableHours ?? 8));
 </script>
 
 <div class="min-h-screen bg-[var(--color-background)] text-[var(--color-text)] flex flex-col">
@@ -134,8 +137,8 @@
       <div class="flex flex-col gap-0">
         {#each weeks as week (week.id)}
           {@const dayBars = buildDayBars(week.start_date, week.dayBreakdown)}
-          {@const maxDayHours = Math.max(1, ...dayBars.map(d => d.hours))}
           {@const BAR_HEIGHT = 56}
+          {@const maxOverflowH = Math.min(28, Math.max(0, ...dayBars.map(d => d.hours > availableHours ? Math.round(((d.hours - availableHours) / availableHours) * BAR_HEIGHT) : 0)))}
           <div class="py-5 border-b border-[var(--color-border)]">
             <!-- Week header row -->
             <div class="flex items-center justify-between gap-4 mb-3">
@@ -167,8 +170,21 @@
             <!-- Day bar chart -->
             <div class="flex gap-2 items-end">
               {#each dayBars as day (day.date)}
-                {@const barH = day.hours > 0 ? Math.max(4, Math.round((day.hours / maxDayHours) * BAR_HEIGHT)) : 0}
+                {@const barH = Math.min(BAR_HEIGHT, Math.round((day.hours / availableHours) * BAR_HEIGHT))}
+                {@const overflowH = day.hours > availableHours ? Math.round(((day.hours - availableHours) / availableHours) * BAR_HEIGHT) : 0}
+                {@const spacerH = maxOverflowH - overflowH}
                 <div class="flex flex-col items-center gap-1 flex-1 min-w-0">
+                  <!-- Overflow visualization -->
+                  {#if maxOverflowH > 0}
+                    <div class="w-full flex flex-col-reverse rounded-sm overflow-hidden" style="height: {maxOverflowH}px;">
+                      {#if overflowH > 0}
+                        <div style="height: {overflowH}px; background: #f97316;"></div>
+                      {/if}
+                      {#if spacerH > 0}
+                        <div style="height: {spacerH}px; background: transparent;"></div>
+                      {/if}
+                    </div>
+                  {/if}
                   <!-- Stacked bar -->
                   <div class="w-full flex flex-col-reverse rounded-sm overflow-hidden" style="height: {BAR_HEIGHT}px; background: var(--color-surface);">
                     {#if day.hours > 0}
