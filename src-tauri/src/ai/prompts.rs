@@ -38,11 +38,15 @@ pub const SYSTEM_PROMPT_GENERIC: &str =
 
 pub const SYSTEM_PROMPT_WEEK_SUMMARY: &str =
     "You are summarising a developer's work week from their Kanban cards. \
+     Card types mean: task = development/coding work I personally built or shipped; \
+     mr = merge requests I reviewed (not my own code — use 'reviewed' not 'worked on'); \
+     meeting = time in meetings; thread = Slack or forum threads I responded to; \
+     review = code or document reviews. \
      Write a concise summary covering exactly these three things in order: \
-     (1) Top 3 focus areas — name the specific work done, not generic categories; \
-     be concrete about what was built, reviewed, or resolved. \
+     (1) Top 3 focus areas — name the specific work done using the card titles; \
+     be precise: say 'reviewed X merge requests' not 'worked on MRs'. \
      (2) Work split — if clocked time data is provided, state the percentage and hours \
-     per category; if not, estimate from card counts and hour estimates. \
+     per category using the correct verb for each type; if not, estimate from card counts. \
      (3) What to carry into next week — one sentence. \
      Use first-person past tense. No markdown headers or bullet points — write flowing prose. \
      Do not invent details not present in the card data.";

@@ -209,8 +209,8 @@
 
 <div
   class="glass-card group relative flex flex-row gap-2 items-start rounded-md border border-[var(--color-glass-border)] bg-[var(--color-glass-bg)] px-3 hover:border-[var(--color-accent)]/40 hover:bg-[var(--color-glass-bg-raised)] backdrop-blur-sm transition-colors"
-  class:py-2={card.card_type !== 'meeting'}
-  class:py-1={card.card_type === 'meeting'}
+  class:py-2.5={card.card_type !== 'meeting'}
+  class:py-1.5={card.card_type === 'meeting'}
   class:cursor-grab={!isPopoverOpen}
   class:active:cursor-grabbing={!isPopoverOpen}
   class:cursor-default={isPopoverOpen}
@@ -247,7 +247,7 @@
 
     <p class="text-sm font-medium text-[var(--color-text)] leading-snug">{card.title}</p>
 
-    <div class="mt-1.5 flex items-center gap-1.5 flex-wrap">
+    <div class="mt-2 flex items-center gap-2 flex-wrap">
       <!-- Project slug badge -->
       {#if cardProject}
         <span

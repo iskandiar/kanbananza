@@ -25,3 +25,21 @@ export async function updateTimeEntry(
 export async function deleteTimeEntry(id: number): Promise<void> {
   return invoke('delete_time_entry', { id });
 }
+
+export async function createManualTimeEntry(
+  date: string,
+  startTime: string,
+  endTime?: string,
+): Promise<TimeEntry> {
+  return invoke('create_manual_time_entry', { date, startTime, endTime });
+}
+
+export interface DayTimeEntry {
+  date: string;
+  start_time: string;
+  end_time: string | null;
+}
+
+export async function listTimeEntriesForWeek(weekStart: string): Promise<DayTimeEntry[]> {
+  return invoke('list_time_entries_for_week', { weekStart });
+}

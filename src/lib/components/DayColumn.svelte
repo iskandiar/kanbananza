@@ -173,16 +173,13 @@
     addError = null;
     const startUtc = toUtcDatetime(newEntryStart);
     const endUtc = newEntryEnd ? toUtcDatetime(newEntryEnd) : undefined;
-    let entry: TimeEntry | undefined;
     try {
-      entry = await timeApi.clockIn(date);
-      await timeApi.updateTimeEntry(entry.id, startUtc, endUtc, undefined);
+      await timeApi.createManualTimeEntry(date, startUtc, endUtc);
       entries = await timeApi.listTimeEntries(date);
       addingEntry = false;
       newEntryStart = '';
       newEntryEnd = '';
     } catch (e) {
-      if (entry) await timeApi.deleteTimeEntry(entry.id).catch(() => {});
       addError = e instanceof Error ? e.message : String(e);
     }
   }
