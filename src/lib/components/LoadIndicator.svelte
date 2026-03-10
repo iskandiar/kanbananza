@@ -36,9 +36,10 @@
         ></div>
       {/if}
     </div>
-    <span>{total.toFixed(1)}h / {availableHours}h</span>
+    {#if availableHours > 0 && total > availableHours}
+      <span class="text-rose-400 whitespace-nowrap">⚠ {(total - availableHours).toFixed(1)}h over</span>
+    {:else}
+      <span>{total.toFixed(1)}h / {availableHours}h</span>
+    {/if}
   </div>
-  {#if availableHours > 0 && total > availableHours}
-    <p class="text-xs text-rose-400 mt-0.5">⚠ {(total - availableHours).toFixed(1)}h over</p>
-  {/if}
 </div>

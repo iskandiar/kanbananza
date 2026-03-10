@@ -20,13 +20,9 @@
 
 ### Card UX
 - **Auto-save** — save card edits immediately on change (no explicit Save button needed); debounce field updates
-- **Delete from card hover** — show a delete/trash icon directly on card hover (alongside ✎ and ↗), not buried inside the edit form
 - **Rework tags/badges** — redesign the card footer badges (type, source, impact) for better visual clarity; consider collapsing or reordering
 - **Integration icons** — improve integration source indicators; use proper icons (SVG/Lucide) instead of text abbreviations (GCal, GL, etc.)
-- **URL paste → open edit** — when a card is created from a pasted URL with no matching integration, auto-open the edit form so the user can set the title immediately
 - **Notes** — introduce a notes/description field per card; collapsible inline view; separate from AI-generated description
-- **Better today indicator** — more prominent highlight of the current day column (bolder border, background tint, header accent)
-- **Mark meeting as done** — allow marking meeting cards as completed, same as task cards
 - **Cards between meetings** — allow placing task/other cards in between meeting cards within a day column (interleaved ordering)
 - **Multi-day task UX** — find a way to have the same Linear task span multiple days visually
 
