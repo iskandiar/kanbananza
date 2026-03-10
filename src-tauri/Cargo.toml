@@ -1,6 +1,6 @@
 [package]
 name = "kanbananza"
-version = "0.7.0"
+version = "0.8.0"
 description = "Kanbananza - Personal Kanban for daily engineering work"
 authors = []
 edition = "2024"
