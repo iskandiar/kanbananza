@@ -110,9 +110,6 @@ pub async fn evaluate_card(card_id: i64, db_state: &DbState) -> Result<(), Strin
                 .get("description")
                 .and_then(|d| d.as_str())
                 .unwrap_or("");
-            let estimate = metadata_val
-                .get("estimate")
-                .and_then(|v| v.as_f64());
 
             let ai_impact = match priority {
                 1 | 2 => "high",
@@ -120,18 +117,11 @@ pub async fn evaluate_card(card_id: i64, db_state: &DbState) -> Result<(), Strin
                 _ => "low",
             };
 
-            let mut msg = format!(
+            let msg = format!(
                 "Linear Issue: {title}\nPriority: {priority_label}\nDescription: {description}"
             );
-            if let Some(pts) = estimate {
-                msg.push_str(&format!("\nStory points: {pts}"));
-            }
 
-            let hours_hint = estimate
-                .map(|pts| format!(" Use {:.1} hours as a starting estimate (story points * 0.5).", pts * 0.5))
-                .unwrap_or_default();
-
-            let sys = build_linear_system_prompt(ai_impact, &hours_hint);
+            let sys = build_linear_system_prompt(ai_impact);
             (sys, msg)
         }
         ("documentation", "notion") => {

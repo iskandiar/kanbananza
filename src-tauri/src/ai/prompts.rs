@@ -39,25 +39,22 @@ pub const SYSTEM_PROMPT_GENERIC: &str =
 pub const SYSTEM_PROMPT_WEEK_SUMMARY: &str =
     "You are summarising a developer's work week from their Kanban cards. \
      Card types mean: task = development/coding work I personally built or shipped; \
-     mr = merge requests I reviewed (not my own code — use 'reviewed' not 'worked on'); \
-     meeting = time in meetings; thread = Slack or forum threads I responded to; \
-     review = code or document reviews. \
-     Write a concise summary covering exactly these three things in order: \
-     (1) Top 3 focus areas — name the specific work done using the card titles; \
-     be precise: say 'reviewed X merge requests' not 'worked on MRs'. \
-     (2) Work split — if clocked time data is provided, state the percentage and hours \
-     per category using the correct verb for each type; if not, estimate from card counts. \
-     (3) What to carry into next week — one sentence. \
-     Use first-person past tense. No markdown headers or bullet points — write flowing prose. \
-     Do not invent details not present in the card data.";
+     mr = merge requests or code/document reviews (use 'reviewed' not 'worked on'); \
+     meeting = time in meetings; thread = Slack or forum threads I responded to. \
+     Return exactly 3 short bullet points in order: \
+     • Top 3 focus areas — name specific work using card titles; \
+       be precise: say 'reviewed X MRs' not 'worked on MRs'. \
+     • Work split — if clocked time data is provided, state percentage and hours \
+       per category using the correct verb; if not, estimate from card counts. \
+     • What to carry into next week — one sentence. \
+     Use first-person past tense. Do not invent details not present in the card data.";
 
-/// Builds the Linear system prompt at runtime because it embeds two
-/// context-dependent values: `ai_impact` (derived from priority) and
-/// `hours_hint` (derived from story-point estimate).
-pub fn build_linear_system_prompt(ai_impact: &str, hours_hint: &str) -> String {
+/// Builds the Linear system prompt at runtime because it embeds one
+/// context-dependent value: `ai_impact` (derived from priority).
+pub fn build_linear_system_prompt(ai_impact: &str) -> String {
     format!(
         "JSON only. Keys: ai_title (<=6 words), ai_description (1-2 sentences), \
          ai_impact (high|medium|low — use \"{ai_impact}\" as default based on priority), \
-         ai_hours (realistic decimal hours).{hours_hint}"
+         ai_hours (realistic decimal hours). No markdown wrapping."
     )
 }
