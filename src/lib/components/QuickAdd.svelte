@@ -224,51 +224,66 @@
     timeEstimate: number | null;
     url: string | null;
     impact: Impact | null;
+    cardType: CardType | null;
   } {
     let cleaned = title;
     let timeEstimate: number | null = null;
     let extractedUrl: string | null = null;
     let impact: Impact | null = null;
+    let cardType: CardType | null = null;
 
-    // Extract URL (http:// or https://)
+    // 1. Extract URL first — any #tokens inside URL fragments are consumed here
     const urlMatch = cleaned.match(/https?:\/\/\S+/);
     if (urlMatch) {
       extractedUrl = urlMatch[0];
       cleaned = cleaned.replace(urlMatch[0], '').trim();
     }
 
-    // Try H:MM format first (e.g. 0:30, 1:30, 2:00) — require valid minutes 00-59
+    // 2. Extract time (H:MM format first, then unit-based)
     const hmMatch = cleaned.match(/(?<!\.)(\b\d+):([0-5]\d)\b/);
     if (hmMatch) {
       timeEstimate = parseInt(hmMatch[1]) + parseInt(hmMatch[2]) / 60;
       cleaned = cleaned.replace(hmMatch[0], '').trim();
     } else {
-      // Fall back to unit-based formats (1h, 30m, 1.5 hours, etc.)
       const timeMatch = cleaned.match(/\b(\d+(?:\.\d+)?)\s*(h|hr|hrs?|hours?|m|min|mins?|minutes?)\b/i);
       if (timeMatch) {
         const val = parseFloat(timeMatch[1]);
         const unit = timeMatch[2].toLowerCase();
-        if (unit === 'm' || unit === 'min' || unit === 'mins' || unit === 'minute' || unit === 'minutes') {
-          timeEstimate = val / 60;
-        } else {
-          timeEstimate = val;
-        }
+        timeEstimate = (unit === 'm' || unit.startsWith('min')) ? val / 60 : val;
         cleaned = cleaned.replace(timeMatch[0], '').trim();
       }
     }
 
-    // Extract priority (!high, !mid, !low, !h, !m, !l)
-    const priorityMatch = cleaned.match(/!(high|mid|low|h|m|l)\b/i);
-    if (priorityMatch) {
-      const p = priorityMatch[1].toLowerCase();
-      if (p === 'h') impact = 'high';
-      else if (p === 'm') impact = 'mid';
-      else if (p === 'l') impact = 'low';
-      else impact = (p as Impact);
-      cleaned = cleaned.replace(priorityMatch[0], '').trim();
-    }
+    // 3. Scan #tokens — split on whitespace, classify each token exactly
+    const TYPE_MAP: Record<string, CardType> = {
+      '#task': 'task', '#todo': 'task',
+      '#meeting': 'meeting', '#meet': 'meeting',
+      '#mr': 'mr',
+      '#thread': 'thread',
+      '#review': 'review',
+      '#doc': 'documentation', '#documentation': 'documentation',
+    };
+    const PRIORITY_MAP: Record<string, Impact> = {
+      '#high': 'high', '#h': 'high',
+      '#mid': 'mid', '#m': 'mid',
+      '#low': 'low', '#l': 'low',
+    };
 
-    return { cleanedTitle: cleaned, timeEstimate, url: extractedUrl, impact };
+    const tokens = cleaned.split(/\s+/);
+    const kept: string[] = [];
+    for (const token of tokens) {
+      const lower = token.toLowerCase();
+      if (TYPE_MAP[lower] !== undefined) {
+        cardType = TYPE_MAP[lower];         // last wins
+      } else if (PRIORITY_MAP[lower] !== undefined) {
+        impact = PRIORITY_MAP[lower];       // last wins
+      } else {
+        kept.push(token);
+      }
+    }
+    cleaned = kept.join(' ').trim();
+
+    return { cleanedTitle: cleaned, timeEstimate, url: extractedUrl, impact, cardType };
   }
 
   function focus(node: HTMLElement) { node.focus(); }

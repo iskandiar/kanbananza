@@ -239,22 +239,126 @@ describe('extractFromTitle', () => {
   });
 
   describe('priority extraction', () => {
-    it('extracts !high', () => {
-      const result = extractFromTitle('Important task !high');
+    it('extracts #high', () => {
+      const result = extractFromTitle('Important task #high');
       expect(result.impact).toBe('high');
       expect(result.cleanedTitle).toBe('Important task');
+      expect(result.cardType).toBeNull();
     });
-    it('extracts !h shorthand', () => {
-      const result = extractFromTitle('Critical fix !h');
+    it('extracts #mid', () => {
+      const result = extractFromTitle('Task #mid');
+      expect(result.impact).toBe('mid');
+      expect(result.cleanedTitle).toBe('Task');
+    });
+    it('extracts #low', () => {
+      const result = extractFromTitle('Task #low');
+      expect(result.impact).toBe('low');
+      expect(result.cleanedTitle).toBe('Task');
+    });
+    it('extracts #h shorthand', () => {
+      const result = extractFromTitle('Critical fix #h');
       expect(result.impact).toBe('high');
+      expect(result.cleanedTitle).toBe('Critical fix');
+    });
+    it('extracts #m shorthand', () => {
+      const result = extractFromTitle('Task #m');
+      expect(result.impact).toBe('mid');
+    });
+    it('extracts #l shorthand', () => {
+      const result = extractFromTitle('Task #l');
+      expect(result.impact).toBe('low');
+    });
+    it('last #priority wins', () => {
+      const result = extractFromTitle('Deploy fix #high #low');
+      expect(result.impact).toBe('low');
+      expect(result.cleanedTitle).toBe('Deploy fix');
+    });
+    it('does not extract !priority (old syntax removed)', () => {
+      const result = extractFromTitle('Important task !high');
+      expect(result.impact).toBeNull();
+      expect(result.cleanedTitle).toBe('Important task !high');
+    });
+  });
+
+  describe('card type extraction', () => {
+    it('extracts #task', () => {
+      const result = extractFromTitle('Fix bug #task');
+      expect(result.cardType).toBe('task');
+      expect(result.cleanedTitle).toBe('Fix bug');
+    });
+    it('extracts #todo as task', () => {
+      const result = extractFromTitle('Fix bug #todo');
+      expect(result.cardType).toBe('task');
+      expect(result.cleanedTitle).toBe('Fix bug');
+    });
+    it('extracts #meeting', () => {
+      const result = extractFromTitle('Standup #meeting');
+      expect(result.cardType).toBe('meeting');
+      expect(result.cleanedTitle).toBe('Standup');
+    });
+    it('extracts #meet as meeting', () => {
+      const result = extractFromTitle('Standup #meet');
+      expect(result.cardType).toBe('meeting');
+    });
+    it('extracts #mr', () => {
+      const result = extractFromTitle('Review auth PR #mr');
+      expect(result.cardType).toBe('mr');
+      expect(result.cleanedTitle).toBe('Review auth PR');
+    });
+    it('does not confuse #mr with #m (priority mid)', () => {
+      const result = extractFromTitle('Task #mr #m');
+      expect(result.cardType).toBe('mr');
+      expect(result.impact).toBe('mid');
+    });
+    it('extracts #thread', () => {
+      const result = extractFromTitle('Slack convo #thread');
+      expect(result.cardType).toBe('thread');
+    });
+    it('extracts #review', () => {
+      const result = extractFromTitle('Code review #review');
+      expect(result.cardType).toBe('review');
+    });
+    it('extracts #doc', () => {
+      const result = extractFromTitle('Write ADR #doc');
+      expect(result.cardType).toBe('documentation');
+    });
+    it('extracts #documentation', () => {
+      const result = extractFromTitle('Write ADR #documentation');
+      expect(result.cardType).toBe('documentation');
+    });
+    it('last #type wins', () => {
+      const result = extractFromTitle('Task #mr #task');
+      expect(result.cardType).toBe('task');
+    });
+    it('returns null for no type token', () => {
+      const result = extractFromTitle('Just a task');
+      expect(result.cardType).toBeNull();
+    });
+    it('leaves unrecognised #words in title', () => {
+      const result = extractFromTitle('Notes about #project planning');
+      expect(result.cardType).toBeNull();
+      expect(result.cleanedTitle).toBe('Notes about #project planning');
     });
   });
 
   describe('combined input', () => {
-    it('handles URL + time + priority together', () => {
-      const result = extractFromTitle('Fix bug https://gitlab.com/issue/1 0:30 !high');
-      expect(result.url).toBe('https://gitlab.com/issue/1');
+    it('handles URL + time + type + priority together', () => {
+      const result = extractFromTitle('Fix auth timeout https://gitlab.local/mr/42 0:30 #mr #high');
+      expect(result.url).toBe('https://gitlab.local/mr/42');
       expect(result.timeEstimate).toBeCloseTo(0.5);
+      expect(result.impact).toBe('high');
+      expect(result.cardType).toBe('mr');
+      expect(result.cleanedTitle).toBe('Fix auth timeout');
+    });
+    it('#high inside URL fragment is not parsed as priority token', () => {
+      const result = extractFromTitle('Task https://example.com/#high');
+      expect(result.url).toBe('https://example.com/#high');
+      expect(result.impact).toBeNull();
+      expect(result.cleanedTitle).toBe('Task');
+    });
+    it('type and priority tokens are case-insensitive', () => {
+      const result = extractFromTitle('Fix bug #MR #HIGH');
+      expect(result.cardType).toBe('mr');
       expect(result.impact).toBe('high');
       expect(result.cleanedTitle).toBe('Fix bug');
     });
