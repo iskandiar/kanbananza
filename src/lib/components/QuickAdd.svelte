@@ -76,11 +76,13 @@
           const card = await createCard(cleanedTitle, cardType ?? inferTypeFromUrl(finalUrl), weekId, dayOfWeek, undefined, finalUrl);
 
           // Update with extracted time and priority if present
+          let finalCard = card;
           if (timeEstimate !== null || impact !== null) {
             const updatedCard = await updateCard(card.id, {
               timeEstimate: timeEstimate ?? undefined,
               impact: impact ?? undefined
             });
+            finalCard = updatedCard;
             value = '';
             active = false;
             onCardCreated?.(updatedCard);
@@ -90,7 +92,7 @@
             active = false;
             onCardCreated?.(card);
           }
-          pendingEditCard = card;
+          pendingEditCard = finalCard;
         } catch (e2) {
           error = String(e2);
         }
@@ -105,11 +107,13 @@
         const card = await createCard(cleanedTitle, cardType ?? inferTypeFromUrl(trimmed), weekId, dayOfWeek, undefined, trimmed);
 
         // Update with extracted time and priority if present
+        let finalCard = card;
         if (timeEstimate !== null || impact !== null) {
           const updatedCard = await updateCard(card.id, {
             timeEstimate: timeEstimate ?? undefined,
             impact: impact ?? undefined
           });
+          finalCard = updatedCard;
           value = '';
           active = false;
           onCardCreated?.(updatedCard);
@@ -119,7 +123,7 @@
           active = false;
           onCardCreated?.(card);
         }
-        pendingEditCard = card;
+        pendingEditCard = finalCard;
       } catch (e) {
         error = String(e);
       } finally {
@@ -137,11 +141,13 @@
           const card = await createCard(cleanedTitle || trimmed, cardType ?? inferTypeFromUrl(extractedUrl), weekId, dayOfWeek, undefined, extractedUrl);
 
           // Update with extracted time and priority if present
+          let finalCard = card;
           if (timeEstimate !== null || impact !== null) {
             const updatedCard = await updateCard(card.id, {
               timeEstimate: timeEstimate ?? undefined,
               impact: impact ?? undefined
             });
+            finalCard = updatedCard;
             value = '';
             active = false;
             onCardCreated?.(updatedCard);
@@ -151,7 +157,7 @@
             active = false;
             onCardCreated?.(card);
           }
-          pendingEditCard = card;
+          pendingEditCard = finalCard;
         } catch (e) {
           error = String(e);
         } finally {
