@@ -53,16 +53,27 @@
       isLoading = true;
       error = null;
       try {
-        const card = await createCardFromUrl(trimmed, weekId, dayOfWeek);
+        const { url: extractedUrl, cardType, impact } = extractFromTitle(trimmed);
+        const card = await createCardFromUrl(extractedUrl ?? trimmed, weekId, dayOfWeek);
+        // Apply token overrides — tags win over integration defaults
+        if (cardType !== null || impact !== null) {
+          const updated = await updateCard(card.id, {
+            ...(cardType !== null ? { cardType } : {}),
+            ...(impact !== null ? { impact } : {}),
+          });
+          boardStore.cards = boardStore.cards.map(c => c.id === updated.id ? updated : c);
+          onCardCreated?.(updated);
+        } else {
+          onCardCreated?.(card);
+        }
         value = '';
         active = false;
-        onCardCreated?.(card);
       } catch {
         // Known URL format but sync failed — fall back to generic card + edit modal
         try {
-          const { cleanedTitle, timeEstimate, url: extractedUrl, impact } = extractFromTitle(trimmed);
+          const { cleanedTitle, timeEstimate, url: extractedUrl, impact, cardType } = extractFromTitle(trimmed);
           const finalUrl = extractedUrl || trimmed;
-          const card = await createCard(cleanedTitle, inferTypeFromUrl(finalUrl), weekId, dayOfWeek, undefined, finalUrl);
+          const card = await createCard(cleanedTitle, cardType ?? inferTypeFromUrl(finalUrl), weekId, dayOfWeek, undefined, finalUrl);
 
           // Update with extracted time and priority if present
           if (timeEstimate !== null || impact !== null) {
@@ -90,8 +101,8 @@
       isLoading = true;
       error = null;
       try {
-        const { cleanedTitle, timeEstimate, impact } = extractFromTitle(trimmed);
-        const card = await createCard(cleanedTitle, inferTypeFromUrl(trimmed), weekId, dayOfWeek, undefined, trimmed);
+        const { cleanedTitle, timeEstimate, impact, cardType } = extractFromTitle(trimmed);
+        const card = await createCard(cleanedTitle, cardType ?? inferTypeFromUrl(trimmed), weekId, dayOfWeek, undefined, trimmed);
 
         // Update with extracted time and priority if present
         if (timeEstimate !== null || impact !== null) {
@@ -115,15 +126,15 @@
         isLoading = false;
       }
     } else {
-      // Regular text input — extract time, URL, priority before creating
-      const { cleanedTitle, timeEstimate, url: extractedUrl, impact } = extractFromTitle(trimmed);
+      // Regular text input — extract time, URL, type, priority before creating
+      const { cleanedTitle, timeEstimate, url: extractedUrl, impact, cardType } = extractFromTitle(trimmed);
 
       if (extractedUrl) {
         // If URL was extracted, create as URL card with extracted values
         isLoading = true;
         error = null;
         try {
-          const card = await createCard(cleanedTitle || trimmed, inferTypeFromUrl(extractedUrl), weekId, dayOfWeek, undefined, extractedUrl);
+          const card = await createCard(cleanedTitle || trimmed, cardType ?? inferTypeFromUrl(extractedUrl), weekId, dayOfWeek, undefined, extractedUrl);
 
           // Update with extracted time and priority if present
           if (timeEstimate !== null || impact !== null) {
@@ -146,22 +157,26 @@
         } finally {
           isLoading = false;
         }
-      } else if (timeEstimate !== null || impact !== null) {
-        // No URL but time or priority was extracted — create card directly with extracted values
+      } else if (timeEstimate !== null || impact !== null || cardType !== null) {
+        // No URL but time, priority, or type was extracted — create card directly with extracted values
         isLoading = true;
         error = null;
         try {
-          const card = await createCard(cleanedTitle, 'task', weekId, dayOfWeek);
-
-          // Update with extracted time and priority
-          const updatedCard = await updateCard(card.id, {
-            timeEstimate: timeEstimate ?? undefined,
-            impact: impact ?? undefined
-          });
-          value = '';
-          active = false;
-          onCardCreated?.(updatedCard);
-          boardStore.cards = boardStore.cards.map(c => c.id === updatedCard.id ? updatedCard : c);
+          const card = await createCard(cleanedTitle, cardType ?? 'task', weekId, dayOfWeek);
+          if (timeEstimate !== null || impact !== null) {
+            const updatedCard = await updateCard(card.id, {
+              timeEstimate: timeEstimate ?? undefined,
+              impact: impact ?? undefined
+            });
+            value = '';
+            active = false;
+            onCardCreated?.(updatedCard);
+            boardStore.cards = boardStore.cards.map(c => c.id === updatedCard.id ? updatedCard : c);
+          } else {
+            value = '';
+            active = false;
+            onCardCreated?.(card);
+          }
         } catch (e) {
           error = String(e);
         } finally {
@@ -191,7 +206,7 @@
   <div class="flex flex-col gap-1">
     <input
       class="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded px-2 py-1.5 text-sm text-[var(--color-text)] placeholder:text-[var(--color-muted)] focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
-      placeholder="Title, URL, 1h or 0:30…"
+      placeholder="Title, URL, 1h, #mr, #high…"
       bind:value
       disabled={isLoading}
       oninput={handleInput}
