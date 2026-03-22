@@ -255,7 +255,7 @@
     }
 
     // 2. Extract time (H:MM format first, then unit-based)
-    const hmMatch = cleaned.match(/(?<!\.)(\b\d+):([0-5]\d)\b/);
+    const hmMatch = cleaned.match(/(?<!\.)(\b\d+):([0-5]\d)h?\b/i);
     if (hmMatch) {
       timeEstimate = parseInt(hmMatch[1]) + parseInt(hmMatch[2]) / 60;
       cleaned = cleaned.replace(hmMatch[0], '').trim();

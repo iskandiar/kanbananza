@@ -209,6 +209,16 @@ describe('extractFromTitle', () => {
       expect(result.timeEstimate).toBeCloseTo(2.0);
       expect(result.cleanedTitle).toBe('Write tests');
     });
+    it('parses 0:20h as 20 minutes (trailing h ignored)', () => {
+      const result = extractFromTitle('Task 0:20h');
+      expect(result.timeEstimate).toBeCloseTo(1 / 3);
+      expect(result.cleanedTitle).toBe('Task');
+    });
+    it('parses 1:30h as 1.5h (trailing h ignored)', () => {
+      const result = extractFromTitle('Task 1:30h');
+      expect(result.timeEstimate).toBeCloseTo(1.5);
+      expect(result.cleanedTitle).toBe('Task');
+    });
   });
 
   describe('existing time formats still work', () => {
