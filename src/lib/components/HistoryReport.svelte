@@ -114,6 +114,67 @@
       return d.hours > ah ? Math.round(((d.hours - ah) / ah) * BAR_HEIGHT) : 0;
     })))
   );
+
+  // Pie chart
+  function buildPieInput(
+    cards: { card_type: string; time_estimate: number | null }[],
+    sessionTotal: number
+  ): { card_type: string; hours: number }[] {
+    const map: Record<string, number> = {};
+    for (const c of cards) {
+      map[c.card_type] = (map[c.card_type] ?? 0) + (c.time_estimate ?? 0);
+    }
+    const estimateTotal = Object.values(map).reduce((s, h) => s + h, 0);
+    const other = Math.max(0, sessionTotal - estimateTotal);
+    return [
+      ...Object.entries(map).filter(([, h]) => h > 0).map(([card_type, hours]) => ({ card_type, hours })),
+      ...(other > 0.01 ? [{ card_type: 'other', hours: other }] : []),
+    ];
+  }
+
+  type PieSlice = { label: string; hours: number; pct: number; color: string; startAngle: number; endAngle: number };
+
+  function buildPieSlices(input: { card_type: string; hours: number }[]): PieSlice[] {
+    const total = input.reduce((s, b) => s + b.hours, 0);
+    if (total === 0) return [];
+    const threshold = total * 0.08;
+    const main = input.filter(b => b.hours >= threshold);
+    const otherHours = input.filter(b => b.hours < threshold).reduce((s, b) => s + b.hours, 0);
+    const items: { label: string; hours: number; color: string }[] = [
+      ...main.map(b => ({ label: b.card_type, hours: b.hours, color: typeColor(b.card_type) })),
+      ...(otherHours > 0 ? [{ label: 'other', hours: otherHours, color: '#6b7280' }] : []),
+    ];
+    let angle = -Math.PI / 2;
+    return items.map(item => {
+      const sweep = (item.hours / total) * 2 * Math.PI;
+      const slice: PieSlice = {
+        label: item.label,
+        hours: item.hours,
+        pct: Math.round((item.hours / total) * 100),
+        color: item.color,
+        startAngle: angle,
+        endAngle: angle + sweep,
+      };
+      angle += sweep;
+      return slice;
+    });
+  }
+
+  function pieArcPath(cx: number, cy: number, r: number, startAngle: number, endAngle: number): string {
+    const x1 = cx + r * Math.cos(startAngle);
+    const y1 = cy + r * Math.sin(startAngle);
+    const x2 = cx + r * Math.cos(endAngle);
+    const y2 = cy + r * Math.sin(endAngle);
+    const largeArc = endAngle - startAngle > Math.PI ? 1 : 0;
+    return `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2} Z`;
+  }
+
+  const pieSlices = $derived.by(() => {
+    if (!week) return [];
+    const input = buildPieInput(weekCards, sessionTotalHours);
+    return buildPieSlices(input);
+  });
+  const pieTotal = $derived(pieSlices.reduce((s, sl) => s + sl.hours, 0));
 </script>
 
 <div class="flex-1 overflow-y-auto">
@@ -179,6 +240,35 @@
                 <p class="text-[0.6rem] text-[var(--color-muted)] uppercase tracking-wide">{day.label}</p>
               </div>
             {/each}
+          </div>
+        </section>
+      {/if}
+
+      <!-- Pie chart -->
+      {#if pieSlices.length > 0}
+        <section>
+          <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-muted)] mb-2">Breakdown</h3>
+          <div class="flex items-center gap-4">
+            <svg width="80" height="80" viewBox="0 0 80 80" class="shrink-0">
+              {#each pieSlices as slice (slice.label)}
+                <path
+                  d={pieArcPath(40, 40, 36, slice.startAngle, slice.endAngle)}
+                  fill={slice.color}
+                  opacity="0.85"
+                />
+              {/each}
+              <circle cx="40" cy="40" r="18" fill="var(--color-background)" />
+              <text x="40" y="44" text-anchor="middle" fill="var(--color-text-muted)" font-size="8">{pieTotal.toFixed(1)}h</text>
+            </svg>
+            <div class="flex flex-col gap-1">
+              {#each pieSlices as slice (slice.label)}
+                <span class="text-[0.6rem] text-[var(--color-text-muted)] flex items-center gap-1.5">
+                  <span class="inline-block w-2 h-2 rounded-sm shrink-0" style="background: {slice.color}"></span>
+                  <span class="capitalize">{slice.label}</span>
+                  <span class="tabular-nums text-[var(--color-muted)]">{slice.hours.toFixed(1)}h · {slice.pct}%</span>
+                </span>
+              {/each}
+            </div>
           </div>
         </section>
       {/if}
