@@ -231,7 +231,36 @@
   {:else}
     <div class="max-w-2xl mx-auto px-6 py-6 flex flex-col gap-8">
 
-      <!-- Stacked bar chart — always shown -->
+      <!-- AI Summary — first -->
+      <section>
+        <h3 class="text-sm font-medium text-[var(--color-text)] mb-3">AI Summary</h3>
+        <div class="flex flex-col gap-2">
+          <p class="text-xs text-[var(--color-muted)]">Your notes <span class="opacity-60">— guides the summary</span></p>
+          <div class="flex gap-2 items-start">
+            <textarea
+              bind:value={notesInput}
+              placeholder="What to focus on, context, open questions…"
+              rows="3"
+              class="flex-1 text-sm bg-[var(--color-surface)] border border-[var(--color-border)] rounded px-3 py-2 text-[var(--color-text)] placeholder:text-[var(--color-muted)] resize-none focus:outline-none focus:border-[var(--color-accent)]"
+            ></textarea>
+            <button
+              onclick={handleSummarise}
+              disabled={summarising || weekCards.length === 0}
+              class="shrink-0 text-xs px-3 py-2 rounded border border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-accent)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
+            >
+              {summarising ? '…' : displaySummary ? '✦ Regenerate' : '✦ Generate'}
+            </button>
+          </div>
+          {#if summaryError}
+            <p class="text-xs text-red-400">{summaryError}</p>
+          {/if}
+          {#if displaySummary}
+            <p class="text-sm text-[var(--color-text-muted)] leading-relaxed bg-[var(--color-surface)] rounded px-3 py-2 mt-1">{displaySummary}</p>
+          {/if}
+        </div>
+      </section>
+
+      <!-- Stacked bar chart -->
       <section>
         <div class="flex items-center justify-between mb-3">
           <h3 class="text-sm font-medium text-[var(--color-text)]">Time</h3>
@@ -263,35 +292,6 @@
             {/each}
           </div>
         </section>
-
-      <!-- AI Summary -->
-      <section>
-        <h3 class="text-sm font-medium text-[var(--color-text)] mb-3">AI Summary</h3>
-        <div class="flex flex-col gap-2">
-          <p class="text-xs text-[var(--color-muted)]">Your notes <span class="opacity-60">— guides the summary</span></p>
-          <div class="flex gap-2 items-start">
-            <textarea
-              bind:value={notesInput}
-              placeholder="What to focus on, context, open questions…"
-              rows="3"
-              class="flex-1 text-sm bg-[var(--color-surface)] border border-[var(--color-border)] rounded px-3 py-2 text-[var(--color-text)] placeholder:text-[var(--color-muted)] resize-none focus:outline-none focus:border-[var(--color-accent)]"
-            ></textarea>
-            <button
-              onclick={handleSummarise}
-              disabled={summarising || weekCards.length === 0}
-              class="shrink-0 text-xs px-3 py-2 rounded border border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-accent)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
-            >
-              {summarising ? '…' : displaySummary ? '✦ Regenerate' : '✦ Generate'}
-            </button>
-          </div>
-          {#if summaryError}
-            <p class="text-xs text-red-400">{summaryError}</p>
-          {/if}
-          {#if displaySummary}
-            <p class="text-sm text-[var(--color-text-muted)] leading-relaxed bg-[var(--color-surface)] rounded px-3 py-2 mt-1">{displaySummary}</p>
-          {/if}
-        </div>
-      </section>
 
       <!-- Breakdown (pie chart) -->
       {#if pieSlices.length > 0}
