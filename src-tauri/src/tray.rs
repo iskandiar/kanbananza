@@ -311,7 +311,7 @@ pub(crate) fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
                             .ok();
                         if let Some(id) = entry_id {
                             let _ = db.execute(
-                                "UPDATE time_entries SET end_time = datetime('now') WHERE id = ?",
+                                "UPDATE time_entries SET end_time = datetime('now') WHERE id = ? AND end_time IS NULL",
                                 [id],
                             );
                         }
