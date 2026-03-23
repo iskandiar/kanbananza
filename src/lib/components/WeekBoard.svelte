@@ -3,6 +3,7 @@
   import WeekHeader from './WeekHeader.svelte';
   import DayColumn from './DayColumn.svelte';
   import BacklogSidebar from './BacklogSidebar.svelte';
+  import HistoryReport from './HistoryReport.svelte';
 
   let {
     weekLabel,
@@ -110,10 +111,7 @@
         </button>
       {/if}
     {:else}
-      <!-- HistoryReport rendered in Task 6 -->
-      <div class="flex-1 flex items-center justify-center text-sm text-[var(--color-muted)]">
-        History report coming…
-      </div>
+      <HistoryReport week={currentWeek} weekCards={weekCards} {availableHours} {isPastWeek} />
     {/if}
   </div>
 </div>
