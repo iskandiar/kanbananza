@@ -229,12 +229,12 @@
   {:else if error}
     <div class="flex items-center justify-center h-full text-sm text-red-400">{error}</div>
   {:else}
-    <div class="max-w-2xl mx-auto px-6 py-6 flex flex-col gap-6">
+    <div class="max-w-2xl mx-auto px-6 py-6 flex flex-col gap-8">
 
       <!-- Stacked bar chart — always shown -->
       <section>
-        <div class="flex items-center justify-between mb-2">
-          <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-muted)]">Time</h3>
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="text-sm font-medium text-[var(--color-text)]">Time</h3>
           <span class="text-xs tabular-nums text-[var(--color-muted)]">{sessionTotalHours.toFixed(1)}h clocked</span>
         </div>
         <div class="flex gap-2 items-end">
@@ -266,34 +266,37 @@
 
       <!-- AI Summary -->
       <section>
-        <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-muted)] mb-2">Summary</h3>
-        {#if displaySummary}
-          <p class="text-sm text-[var(--color-text-muted)] leading-relaxed mb-3">{displaySummary}</p>
-        {/if}
-        <div class="flex gap-2 items-start">
-          <textarea
-            bind:value={notesInput}
-            placeholder="Add guiding notes (optional)…"
-            rows="2"
-            class="flex-1 text-xs bg-[var(--color-surface)] border border-[var(--color-border)] rounded px-2 py-1.5 text-[var(--color-text)] placeholder:text-[var(--color-muted)] resize-none focus:outline-none focus:border-[var(--color-accent)]"
-          ></textarea>
-          <button
-            onclick={handleSummarise}
-            disabled={summarising || weekCards.length === 0}
-            class="shrink-0 text-xs px-2.5 py-1 rounded border border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-text)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
-          >
-            {summarising ? '…' : '✦ Summarize'}
-          </button>
+        <h3 class="text-sm font-medium text-[var(--color-text)] mb-3">AI Summary</h3>
+        <div class="flex flex-col gap-2">
+          <p class="text-xs text-[var(--color-muted)]">Your notes <span class="opacity-60">— guides the summary</span></p>
+          <div class="flex gap-2 items-start">
+            <textarea
+              bind:value={notesInput}
+              placeholder="What to focus on, context, open questions…"
+              rows="3"
+              class="flex-1 text-sm bg-[var(--color-surface)] border border-[var(--color-border)] rounded px-3 py-2 text-[var(--color-text)] placeholder:text-[var(--color-muted)] resize-none focus:outline-none focus:border-[var(--color-accent)]"
+            ></textarea>
+            <button
+              onclick={handleSummarise}
+              disabled={summarising || weekCards.length === 0}
+              class="shrink-0 text-xs px-3 py-2 rounded border border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-accent)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
+            >
+              {summarising ? '…' : displaySummary ? '✦ Regenerate' : '✦ Generate'}
+            </button>
+          </div>
+          {#if summaryError}
+            <p class="text-xs text-red-400">{summaryError}</p>
+          {/if}
+          {#if displaySummary}
+            <p class="text-sm text-[var(--color-text-muted)] leading-relaxed bg-[var(--color-surface)] rounded px-3 py-2 mt-1">{displaySummary}</p>
+          {/if}
         </div>
-        {#if summaryError}
-          <p class="text-xs text-red-400 mt-1">{summaryError}</p>
-        {/if}
       </section>
 
       <!-- Breakdown (pie chart) -->
       {#if pieSlices.length > 0}
         <section>
-          <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-muted)] mb-2">Breakdown</h3>
+          <h3 class="text-sm font-medium text-[var(--color-text)] mb-3">Breakdown</h3>
           <div class="flex items-center gap-6">
             <svg width="120" height="120" viewBox="0 0 120 120" class="shrink-0">
               {#each pieSlices as slice (slice.label)}
@@ -320,26 +323,29 @@
       {/if}
 
       <!-- Items by card type — last -->
-      {#each cardsByType as [type, cards] (type)}
-        {@const doneCount = cards.filter(c => c.status === 'done').length}
-        <section>
-          <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-muted)] mb-2 capitalize flex items-baseline gap-2">
-            {type}
-            <span class="font-normal normal-case tracking-normal">{cards.length} · {doneCount} done</span>
-          </h3>
-          <ul class="flex flex-col gap-0.5">
-            {#each cards as card (card.id)}
-              <li class="flex items-baseline gap-1.5 {card.status === 'done' ? 'opacity-40' : ''}">
-                <span class="text-[var(--color-muted)] text-xs shrink-0">·</span>
-                <span class="text-sm text-[var(--color-text)]">{card.title}</span>
-                {#if card.time_estimate && card.time_estimate > 0}
-                  <span class="text-xs text-[var(--color-muted)] shrink-0">{card.time_estimate.toFixed(1)}h</span>
-                {/if}
-              </li>
-            {/each}
-          </ul>
-        </section>
-      {/each}
+      <div class="flex flex-col gap-5">
+        {#each cardsByType as [type, cards] (type)}
+          {@const doneCount = cards.filter(c => c.status === 'done').length}
+          <section>
+            <div class="flex items-center gap-2 mb-1.5">
+              <span class="inline-block w-2 h-2 rounded-sm shrink-0" style="background: {typeColor(type)}"></span>
+              <h4 class="text-xs font-medium uppercase tracking-wide text-[var(--color-muted)] capitalize">{type}</h4>
+              <span class="text-xs text-[var(--color-muted)] opacity-60">{cards.length} · {doneCount} done</span>
+            </div>
+            <ul class="flex flex-col gap-0.5 pl-4">
+              {#each cards as card (card.id)}
+                <li class="flex items-baseline gap-1.5 {card.status === 'done' ? 'opacity-40' : ''}">
+                  <span class="text-[var(--color-muted)] text-xs shrink-0">·</span>
+                  <span class="text-sm text-[var(--color-text)]">{card.title}</span>
+                  {#if card.time_estimate && card.time_estimate > 0}
+                    <span class="text-xs text-[var(--color-muted)] shrink-0">{card.time_estimate.toFixed(1)}h</span>
+                  {/if}
+                </li>
+              {/each}
+            </ul>
+          </section>
+        {/each}
+      </div>
 
     </div>
   {/if}
