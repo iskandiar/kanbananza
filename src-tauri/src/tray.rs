@@ -3,8 +3,11 @@
 //! DB query helpers are `pub(crate)` so tests can call them directly.
 
 use crate::commands::weeks::db_get_week_by_date;
+use crate::db::DbState;
 use chrono::{Datelike, Local};
 use rusqlite::Connection;
+use tauri::{AppHandle, Manager};
+use tauri::menu::{Menu, MenuBuilder, MenuItemBuilder};
 
 // ---------------------------------------------------------------------------
 // DB query helpers
@@ -140,6 +143,197 @@ fn elapsed_minutes(start_time: &str) -> i64 {
         }
         None => 0,
     }
+}
+
+// ---------------------------------------------------------------------------
+// Tauri tray functions
+// ---------------------------------------------------------------------------
+
+/// Rebuild the tray menu from current DB state.
+pub(crate) fn rebuild_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
+    let db_state = app.state::<DbState>();
+    let db = match db_state.0.lock() {
+        Ok(db) => db,
+        Err(_) => {
+            // Fallback: Open + Quit only
+            return MenuBuilder::new(app)
+                .item(&MenuItemBuilder::with_id("open", "Open Kanbananza").build(app)?)
+                .separator()
+                .item(&MenuItemBuilder::with_id("quit", "Quit").build(app)?)
+                .build();
+        }
+    };
+
+    let ctx = today_context(&db);
+    let timer = query_active_timer(&db);
+    let meetings = query_today_meetings(&db, &ctx);
+    let high_priority = query_today_high_priority(&db, &ctx);
+    drop(db); // release lock before building menu
+
+    let mut builder = MenuBuilder::new(app);
+
+    // Open
+    builder = builder
+        .item(&MenuItemBuilder::with_id("open", "Open Kanbananza").build(app)?);
+
+    // Separator
+    builder = builder.separator();
+
+    // Clock In / Clock Out
+    let clock_item = if let Some((title, elapsed)) = &timer {
+        let label = format!("Clock Out  ({} · {}m)", title, elapsed);
+        MenuItemBuilder::with_id("clock_out", label).build(app)?
+    } else {
+        MenuItemBuilder::with_id("clock_in", "Clock In").build(app)?
+    };
+    builder = builder.item(&clock_item);
+
+    // Meetings section
+    if !meetings.is_empty() {
+        builder = builder.separator();
+        builder = builder.item(
+            &MenuItemBuilder::with_id("meetings_header", "MEETINGS TODAY")
+                .enabled(false)
+                .build(app)?
+        );
+        for (i, title) in meetings.iter().enumerate() {
+            let id = format!("meeting_{}", i);
+            builder = builder.item(
+                &MenuItemBuilder::with_id(id, format!("  {}", title))
+                    .enabled(false)
+                    .build(app)?
+            );
+        }
+    }
+
+    // High Priority section
+    if !high_priority.is_empty() {
+        builder = builder.separator();
+        builder = builder.item(
+            &MenuItemBuilder::with_id("hp_header", "HIGH PRIORITY")
+                .enabled(false)
+                .build(app)?
+        );
+        for (i, title) in high_priority.iter().enumerate() {
+            let id = format!("hp_{}", i);
+            builder = builder.item(
+                &MenuItemBuilder::with_id(id, format!("  {}", title))
+                    .enabled(false)
+                    .build(app)?
+            );
+        }
+    }
+
+    // Quit
+    builder = builder
+        .separator()
+        .item(&MenuItemBuilder::with_id("quit", "Quit").build(app)?);
+
+    builder.build()
+}
+
+/// Update dock badge count and swap tray icon based on timer state.
+pub(crate) fn update_badge_and_icon(app: &AppHandle) {
+    let db_state = app.state::<DbState>();
+    let Ok(db) = db_state.0.lock() else { return };
+
+    let ctx = today_context(&db);
+    let count = query_badge_count(&db, &ctx);
+    let timer_active = query_active_timer(&db).is_some();
+    drop(db);
+
+    // Update dock badge via the main window
+    if let Some(win) = app.get_webview_window("main") {
+        let _ = win.set_badge_count(if count > 0 { Some(count) } else { None });
+    }
+
+    // Swap tray icon
+    if let Some(tray) = app.tray_by_id("main") {
+        let icon_bytes: &[u8] = if timer_active {
+            include_bytes!("../icons/tray-active.png")
+        } else {
+            include_bytes!("../icons/tray-default.png")
+        };
+        if let Ok(icon) = tauri::image::Image::from_bytes(icon_bytes) {
+            let _ = tray.set_icon(Some(icon));
+        }
+    }
+}
+
+/// Called once at app startup — creates the tray icon and registers menu event handlers.
+pub(crate) fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
+    let menu = rebuild_menu(app)?;
+    let icon_bytes = include_bytes!("../icons/tray-default.png");
+    let icon = tauri::image::Image::from_bytes(icon_bytes)?;
+
+    tauri::tray::TrayIconBuilder::with_id("main")
+        .icon(icon)
+        .menu(&menu)
+        .on_menu_event(|app, event| {
+            match event.id().as_ref() {
+                "open" => {
+                    if let Some(win) = app.get_webview_window("main") {
+                        let _ = win.show();
+                        let _ = win.set_focus();
+                    }
+                }
+                "clock_in" => {
+                    let db_state = app.state::<DbState>();
+                    let clocked_in = {
+                        let Ok(db) = db_state.0.lock() else { return };
+                        let ctx = today_context(&db);
+                        if let Some(card_id) = query_most_recent_planned_card(&db, &ctx) {
+                            let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+                            crate::commands::card_time_entries::db_card_clock_in(&db, card_id, &today).is_ok()
+                        } else {
+                            false
+                        }
+                    };
+                    if !clocked_in {
+                        // No planned card — focus the window so the user can pick one
+                        if let Some(win) = app.get_webview_window("main") {
+                            let _ = win.show();
+                            let _ = win.set_focus();
+                        }
+                    }
+                    update_badge_and_icon(app);
+                    if let Some(tray) = app.tray_by_id("main") {
+                        if let Ok(menu) = rebuild_menu(app) {
+                            let _ = tray.set_menu(Some(menu));
+                        }
+                    }
+                }
+                "clock_out" => {
+                    let db_state = app.state::<DbState>();
+                    {
+                        let Ok(db) = db_state.0.lock() else { return };
+                        // Find the active entry and clock out
+                        let entry_id: Option<i64> = db.query_row(
+                            "SELECT id FROM card_time_entries WHERE end_time IS NULL LIMIT 1",
+                            [],
+                            |row| row.get(0),
+                        ).ok();
+                        if let Some(id) = entry_id {
+                            let _ = crate::commands::card_time_entries::db_card_clock_out(&db, id);
+                        }
+                    }
+                    update_badge_and_icon(app);
+                    if let Some(tray) = app.tray_by_id("main") {
+                        if let Ok(menu) = rebuild_menu(app) {
+                            let _ = tray.set_menu(Some(menu));
+                        }
+                    }
+                }
+                "quit" => {
+                    app.exit(0);
+                }
+                _ => {}
+            }
+        })
+        .build(app)?;
+
+    update_badge_and_icon(app);
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
