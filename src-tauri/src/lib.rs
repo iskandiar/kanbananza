@@ -3,6 +3,7 @@ pub mod commands;
 pub mod db;
 pub mod error;
 pub mod integrations;
+pub mod tray;
 pub mod types;
 #[cfg(test)]
 pub mod tests;
