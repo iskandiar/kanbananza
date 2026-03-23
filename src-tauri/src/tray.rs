@@ -82,25 +82,21 @@ pub(crate) fn query_today_high_priority(db: &Connection, ctx: &TodayContext) -> 
     .unwrap_or_default()
 }
 
-/// Returns (card_title, elapsed_minutes) for the active timer, or None.
-pub(crate) fn query_active_timer(db: &Connection) -> Option<(String, i64)> {
+/// Returns (entry_id, elapsed_minutes) for the active day timer, or None.
+pub(crate) fn query_active_timer(db: &Connection) -> Option<(i64, i64)> {
     db.query_row(
-        "SELECT c.title, cte.start_time \
-         FROM card_time_entries cte \
-         JOIN cards c ON c.id = cte.card_id \
-         WHERE cte.end_time IS NULL \
-         LIMIT 1",
+        "SELECT id, start_time FROM time_entries WHERE end_time IS NULL LIMIT 1",
         [],
         |row| {
-            let title: String = row.get(0)?;
+            let id: i64 = row.get(0)?;
             let start_time: String = row.get(1)?;
-            Ok((title, start_time))
+            Ok((id, start_time))
         },
     )
     .ok()
-    .map(|(title, start_time)| {
+    .map(|(id, start_time)| {
         let elapsed = elapsed_minutes(&start_time);
-        (title, elapsed)
+        (id, elapsed)
     })
 }
 
@@ -182,8 +178,8 @@ pub(crate) fn rebuild_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     builder = builder.separator();
 
     // Clock In / Clock Out
-    let clock_item = if let Some((title, elapsed)) = &timer {
-        let label = format!("Clock Out  ({} · {}m)", title, elapsed);
+    let clock_item = if let Some((_entry_id, elapsed)) = &timer {
+        let label = format!("Clock Out · {}m", elapsed);
         MenuItemBuilder::with_id("clock_out", label).build(app)?
     } else {
         MenuItemBuilder::with_id("clock_in", "Clock In").build(app)?
@@ -346,7 +342,6 @@ pub(crate) fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
 mod tests {
     use super::*;
     use crate::commands::{
-        card_time_entries::db_card_clock_in,
         cards::db_create_card,
         weeks::db_get_or_create_week,
     };
@@ -471,25 +466,18 @@ mod tests {
     }
 
     #[test]
-    fn active_timer_returns_card_title_when_clocked_in() {
+    fn active_timer_returns_entry_when_clocked_in() {
         let db = open_test_db();
-        let (_, card_id) = seed_card(&db, &CardType::Task, None, 0);
-        db_card_clock_in(&db, card_id, "2026-03-23").unwrap();
+        db.execute(
+            "INSERT INTO time_entries (date, start_time) VALUES (?, datetime('now'))",
+            ["2026-03-23"],
+        )
+        .unwrap();
+        let inserted_id = db.last_insert_rowid();
         let result = query_active_timer(&db);
         assert!(result.is_some());
-        let (title, elapsed) = result.unwrap();
-        assert_eq!(title, "Test card");
+        let (entry_id, elapsed) = result.unwrap();
+        assert_eq!(entry_id, inserted_id);
         assert!(elapsed >= 0);
-    }
-
-    #[test]
-    fn most_recent_planned_card_returns_card_id() {
-        let db = open_test_db();
-        let (week_id, card_id) = seed_card(&db, &CardType::Task, None, 0);
-        let ctx = TodayContext {
-            week_id: Some(week_id),
-            day_of_week: 0,
-        };
-        assert_eq!(query_most_recent_planned_card(&db, &ctx), Some(card_id));
     }
 }
