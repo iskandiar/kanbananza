@@ -54,6 +54,66 @@
         return sum + (end - start) / 3_600_000;
       }, 0)
   );
+
+  const typeColors: Record<string, string> = {
+    task: '#10b981',
+    meeting: '#3b82f6',
+    mr: '#a855f7',
+    thread: '#eab308',
+    review: '#64748b',
+    documentation: '#64748b',
+  };
+
+  function typeColor(type: string): string {
+    return typeColors[type] ?? '#6b7280';
+  }
+
+  const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+
+  function dayDate(weekStart: string, dayIndex: number): string {
+    const d = new Date(weekStart + 'T00:00:00Z');
+    d.setUTCDate(d.getUTCDate() + dayIndex);
+    return d.toISOString().slice(0, 10);
+  }
+
+  function toLocalHHMM(utcDatetime: string): string {
+    const d = new Date(utcDatetime.replace(' ', 'T') + 'Z');
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+  }
+
+  type DayBar = {
+    label: string; date: string; hours: number;
+    segments: { card_type: string; hours: number; color: string }[];
+    sessionLabel: string;
+  };
+
+  const BAR_HEIGHT = 56;
+
+  const dayBars = $derived.by((): DayBar[] => {
+    if (!week) return [];
+    const today = new Date().toISOString().slice(0, 10);
+    return DAY_LABELS.map((label, i) => {
+      const date = dayDate(week!.start_date, i);
+      const isFuture = date > today;
+      const entries = isFuture ? [] : dayBreakdown.filter(d => d.date === date);
+      const hours = entries.reduce((s, e) => s + e.hours, 0);
+      const daySessions = sessionEntries.filter(s => s.date === date && s.end_time !== null);
+      let sessionLabel = '–';
+      if (daySessions.length > 0) {
+        const first = toLocalHHMM(daySessions[0].start_time);
+        const last = toLocalHHMM(daySessions[daySessions.length - 1].end_time!);
+        sessionLabel = `${first}–${last}`;
+      }
+      return { label, date, hours, segments: entries.map(e => ({ card_type: e.card_type, hours: e.hours, color: typeColor(e.card_type) })), sessionLabel };
+    });
+  });
+
+  const maxOverflowH = $derived(
+    Math.min(28, Math.max(0, ...dayBars.map(d => {
+      const ah = Math.max(1, availableHours ?? 8);
+      return d.hours > ah ? Math.round(((d.hours - ah) / ah) * BAR_HEIGHT) : 0;
+    })))
+  );
 </script>
 
 <div class="flex-1 overflow-y-auto">
@@ -87,7 +147,41 @@
         </section>
       {/each}
 
-      <!-- Charts and summary added in Tasks 6–8 -->
+      <!-- Stacked bar chart -->
+      {#if sessionTotalHours > 0 || dayBars.some(d => d.hours > 0)}
+        {@const ah = Math.max(1, availableHours ?? 8)}
+        <section>
+          <div class="flex items-center justify-between mb-2">
+            <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-muted)]">Time</h3>
+            <span class="text-xs tabular-nums text-[var(--color-muted)]">{sessionTotalHours.toFixed(1)}h clocked</span>
+          </div>
+          <div class="flex gap-2 items-end">
+            {#each dayBars as day (day.date)}
+              {@const barH = Math.min(BAR_HEIGHT, Math.round((day.hours / ah) * BAR_HEIGHT))}
+              {@const overflowH = day.hours > ah ? Math.round(((day.hours - ah) / ah) * BAR_HEIGHT) : 0}
+              {@const spacerH = maxOverflowH - overflowH}
+              <div class="flex flex-col items-center gap-1 flex-1 min-w-0">
+                {#if maxOverflowH > 0}
+                  <div class="w-full flex flex-col-reverse rounded-sm overflow-hidden" style="height: {maxOverflowH}px;">
+                    {#if overflowH > 0}<div style="height: {overflowH}px; background: #f97316;"></div>{/if}
+                    {#if spacerH > 0}<div style="height: {spacerH}px; background: transparent;"></div>{/if}
+                  </div>
+                {/if}
+                <div class="w-full flex flex-col-reverse rounded-sm overflow-hidden" style="height: {BAR_HEIGHT}px; background: var(--color-surface);">
+                  {#if day.hours > 0}
+                    {#each day.segments as seg (seg.card_type)}
+                      {@const segH = Math.max(2, Math.round((seg.hours / day.hours) * barH))}
+                      <div style="height: {segH}px; background: {seg.color};" title="{seg.card_type}: {seg.hours.toFixed(1)}h"></div>
+                    {/each}
+                  {/if}
+                </div>
+                <p class="text-[0.6rem] tabular-nums text-[var(--color-text-muted)]">{day.sessionLabel}</p>
+                <p class="text-[0.6rem] text-[var(--color-muted)] uppercase tracking-wide">{day.label}</p>
+              </div>
+            {/each}
+          </div>
+        </section>
+      {/if}
 
     </div>
   {/if}
