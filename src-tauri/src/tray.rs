@@ -228,8 +228,16 @@ pub(crate) fn update_badge_and_icon(app: &AppHandle) {
     drop(db);
 
     // Update dock badge via the main window
+    // Clear badge when clocked in; show remaining count when not clocked in
     if let Some(win) = app.get_webview_window("main") {
-        let _ = win.set_badge_count(if count > 0 { Some(count) } else { None });
+        let badge = if timer_active {
+            None
+        } else if count > 0 {
+            Some(count)
+        } else {
+            None
+        };
+        let _ = win.set_badge_count(badge);
     }
 
     // Swap tray icon
