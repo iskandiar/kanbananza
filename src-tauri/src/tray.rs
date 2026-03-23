@@ -288,7 +288,7 @@ pub(crate) fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
                         } else {
                             false
                         }
-                    };
+                    }; // lock released here — update_badge_and_icon and rebuild_menu acquire it below
                     if !clocked_in {
                         // No planned card — focus the window so the user can pick one
                         if let Some(win) = app.get_webview_window("main") {
@@ -316,7 +316,7 @@ pub(crate) fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
                         if let Some(id) = entry_id {
                             let _ = crate::commands::card_time_entries::db_card_clock_out(&db, id);
                         }
-                    }
+                    } // lock released here — update_badge_and_icon and rebuild_menu acquire it below
                     update_badge_and_icon(app);
                     if let Some(tray) = app.tray_by_id("main") {
                         if let Ok(menu) = rebuild_menu(app) {
