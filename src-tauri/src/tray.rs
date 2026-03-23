@@ -135,7 +135,7 @@ fn elapsed_minutes(start_time: &str) -> i64 {
     let start = NaiveDateTime::parse_from_str(start_time, fmt).ok();
     match start {
         Some(s) => {
-            let now = Local::now().naive_local();
+            let now = Local::now().naive_utc();
             (now - s).num_minutes().max(0)
         }
         None => 0,
@@ -281,8 +281,9 @@ mod tests {
         db_card_clock_in(&db, card_id, "2026-03-23").unwrap();
         let result = query_active_timer(&db);
         assert!(result.is_some());
-        let (title, _elapsed) = result.unwrap();
+        let (title, elapsed) = result.unwrap();
         assert_eq!(title, "Test card");
+        assert!(elapsed >= 0);
     }
 
     #[test]
