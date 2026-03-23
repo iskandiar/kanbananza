@@ -1,12 +1,17 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { TimeEntry } from '$lib/types';
+import { refreshTray } from '$lib/api/tray';
 
 export async function clockIn(date: string): Promise<TimeEntry> {
-  return invoke('clock_in', { date });
+  const entry = await invoke<TimeEntry>('clock_in', { date });
+  refreshTray();
+  return entry;
 }
 
 export async function clockOut(entryId: number): Promise<TimeEntry> {
-  return invoke('clock_out', { entryId });
+  const entry = await invoke<TimeEntry>('clock_out', { entryId });
+  refreshTray();
+  return entry;
 }
 
 export async function listTimeEntries(date: string): Promise<TimeEntry[]> {
