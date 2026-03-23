@@ -115,19 +115,6 @@ pub(crate) fn query_badge_count(db: &Connection, ctx: &TodayContext) -> i64 {
     .unwrap_or(0)
 }
 
-/// Returns the card_id of the most-recently-updated planned card for today (for Clock In).
-pub(crate) fn query_most_recent_planned_card(db: &Connection, ctx: &TodayContext) -> Option<i64> {
-    let week_id = ctx.week_id?;
-    db.query_row(
-        "SELECT id FROM cards \
-         WHERE status='planned' AND week_id=? AND day_of_week=? AND deleted_at IS NULL \
-         ORDER BY updated_at DESC LIMIT 1",
-        rusqlite::params![week_id, ctx.day_of_week],
-        |row| row.get::<_, i64>(0),
-    )
-    .ok()
-}
-
 /// Parse a SQLite datetime string (e.g. "2026-03-23 10:30:00") and return elapsed minutes.
 fn elapsed_minutes(start_time: &str) -> i64 {
     use chrono::NaiveDateTime;
@@ -277,23 +264,25 @@ pub(crate) fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
                 }
                 "clock_in" => {
                     let db_state = app.state::<DbState>();
-                    let clocked_in = {
+                    {
                         let Ok(db) = db_state.0.lock() else { return };
-                        let ctx = today_context(&db);
-                        if let Some(card_id) = query_most_recent_planned_card(&db, &ctx) {
+                        // Guard: only insert if no open entry exists
+                        let already_open: bool = db
+                            .query_row(
+                                "SELECT COUNT(*) FROM time_entries WHERE end_time IS NULL",
+                                [],
+                                |row| row.get::<_, i64>(0),
+                            )
+                            .unwrap_or(0)
+                            > 0;
+                        if !already_open {
                             let today = chrono::Local::now().format("%Y-%m-%d").to_string();
-                            crate::commands::card_time_entries::db_card_clock_in(&db, card_id, &today).is_ok()
-                        } else {
-                            false
+                            let _ = db.execute(
+                                "INSERT INTO time_entries (date, start_time) VALUES (?, datetime('now'))",
+                                [&today],
+                            );
                         }
-                    }; // lock released here — update_badge_and_icon and rebuild_menu acquire it below
-                    if !clocked_in {
-                        // No planned card — focus the window so the user can pick one
-                        if let Some(win) = app.get_webview_window("main") {
-                            let _ = win.show();
-                            let _ = win.set_focus();
-                        }
-                    }
+                    } // DB lock released here
                     update_badge_and_icon(app);
                     if let Some(tray) = app.tray_by_id("main") {
                         if let Ok(menu) = rebuild_menu(app) {
@@ -305,16 +294,20 @@ pub(crate) fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
                     let db_state = app.state::<DbState>();
                     {
                         let Ok(db) = db_state.0.lock() else { return };
-                        // Find the active entry and clock out
-                        let entry_id: Option<i64> = db.query_row(
-                            "SELECT id FROM card_time_entries WHERE end_time IS NULL LIMIT 1",
-                            [],
-                            |row| row.get(0),
-                        ).ok();
+                        let entry_id: Option<i64> = db
+                            .query_row(
+                                "SELECT id FROM time_entries WHERE end_time IS NULL LIMIT 1",
+                                [],
+                                |row| row.get(0),
+                            )
+                            .ok();
                         if let Some(id) = entry_id {
-                            let _ = crate::commands::card_time_entries::db_card_clock_out(&db, id);
+                            let _ = db.execute(
+                                "UPDATE time_entries SET end_time = datetime('now') WHERE id = ?",
+                                [id],
+                            );
                         }
-                    } // lock released here — update_badge_and_icon and rebuild_menu acquire it below
+                    } // DB lock released here
                     update_badge_and_icon(app);
                     if let Some(tray) = app.tray_by_id("main") {
                         if let Ok(menu) = rebuild_menu(app) {
