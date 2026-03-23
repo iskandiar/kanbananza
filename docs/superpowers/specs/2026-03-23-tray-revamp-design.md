@@ -42,11 +42,11 @@ UPDATE time_entries SET end_time = datetime('now') WHERE id = ?;
 
 ### Code changes in `src-tauri/src/tray.rs`
 
-- `query_active_timer` — rewrite to query `time_entries` instead of `card_time_entries`. Return type changes from `Option<(String, i64)>` to `Option<i64>` (elapsed minutes only).
-- `rebuild_menu` — Clock Out label becomes `format!("Clock Out · {}m", elapsed)`.
-- `"clock_in"` event handler — replace `db_card_clock_in` call with direct SQL insert into `time_entries`.
-- `"clock_out"` event handler — replace `card_time_entries` query with `time_entries WHERE end_time IS NULL`.
-- Remove `query_most_recent_planned_card` (no longer needed). Remove its import of `db_card_clock_in` from `card_time_entries`.
+- `query_active_timer` — rewrite to query `time_entries` instead of `card_time_entries`. Return type changes from `Option<(String, i64)>` to `Option<(i64, i64)>` (row id, elapsed minutes). The row id is needed by the Clock Out handler to update the correct row.
+- `rebuild_menu` — receives `Option<(i64, i64)>` from `query_active_timer`; Clock Out label becomes `format!("Clock Out · {}m", elapsed)` (no card title).
+- `"clock_in"` event handler — guard: if `time_entries WHERE end_time IS NULL` already exists, do nothing (no duplicate open entries). Otherwise: `INSERT INTO time_entries (date, start_time) VALUES (today, datetime('now'))`.
+- `"clock_out"` event handler — query `SELECT id FROM time_entries WHERE end_time IS NULL LIMIT 1`, then `UPDATE time_entries SET end_time=datetime('now') WHERE id=?`.
+- Remove `query_most_recent_planned_card` (no longer needed). Remove the `db_card_clock_in` import from `card_time_entries`.
 
 ---
 
@@ -72,7 +72,16 @@ Icons are 16×16 (standard) / 32×32 (@2x). Dots are ~4px diameter. The existing
 | Timer running | `set_badge_count(None)` — badge cleared |
 | Timer not running | `set_badge_count(Some(n))` where n = today's planned card count |
 
-This is the **inverse** of the current behaviour (which always shows the count regardless of timer state). Logic change is in `update_badge_and_icon` in `tray.rs`.
+This is the **inverse** of the current behaviour (which always shows the count regardless of timer state). Logic change is in `update_badge_and_icon` in `tray.rs`:
+
+```rust
+// Pseudocode for updated dock badge logic
+if timer_active {
+    win.set_badge_count(None);  // clocked in — clear badge
+} else {
+    win.set_badge_count(if count > 0 { Some(count) } else { None });
+}
+```
 
 ---
 
@@ -95,4 +104,5 @@ No schema changes. No new dependencies.
 - Manual: Clock In from tray → tray icon turns green dot, dock badge clears
 - Manual: Clock Out from tray → tray icon turns red dot, dock badge shows remaining count
 - Manual: Clock In from day play button, then open tray → shows Clock Out (timer already active)
-- Rust unit test: update `active_timer_returns_card_title_when_clocked_in` → query `time_entries` instead; assert elapsed ≥ 0
+- Manual: Clock In from tray when already clocked in → no-op (menu already shows Clock Out; handler guard prevents duplicate entry)
+- Rust unit test: rewrite `active_timer_returns_card_title_when_clocked_in` — seed a row directly in `time_entries` (not via `db_card_clock_in`), call `query_active_timer`, assert `Some((id, elapsed))` where `elapsed >= 0`. Remove the title assertion (no card title in day timer).
