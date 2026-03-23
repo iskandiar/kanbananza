@@ -19,11 +19,12 @@ pub(crate) struct TodayContext {
     pub day_of_week: i64,
 }
 
-/// Resolve the current week_id and day_of_week (0=Mon … 6=Sun) from today's date.
+/// Resolve the current week_id and day_of_week (1=Mon … 5=Fri) from today's date.
+/// Uses 1-based indexing to match the app's storage convention (day_of_week=1 for Monday).
 pub(crate) fn today_context(db: &Connection) -> TodayContext {
     let now = Local::now();
     let today = now.format("%Y-%m-%d").to_string();
-    let day_of_week = now.weekday().num_days_from_monday() as i64;
+    let day_of_week = now.weekday().num_days_from_monday() as i64 + 1;
     let week_id = db_get_week_by_date(db, &today)
         .ok()
         .flatten()
