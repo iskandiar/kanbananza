@@ -10,8 +10,10 @@
     onNext,
     onJumpToToday,
     onRollover,
-    clockedHours
-  }: { weekLabel: string; unfinishedCount: number; isCurrentWeek: boolean; onPrev: () => void; onNext: () => void; onJumpToToday: () => void; onRollover: () => void; clockedHours?: number } = $props();
+    clockedHours,
+    viewMode = 'board' as 'board' | 'history',
+    onToggleMode = () => {}
+  }: { weekLabel: string; unfinishedCount: number; isCurrentWeek: boolean; onPrev: () => void; onNext: () => void; onJumpToToday: () => void; onRollover: () => void; clockedHours?: number; viewMode?: 'board' | 'history'; onToggleMode?: () => void } = $props();
 
   let rolloverConfirming = $state(false);
   let showShortcuts = $state(false);
@@ -69,13 +71,15 @@
     >
       Projects
     </a>
-    <a
-      href="/history"
-      class="text-xs px-2.5 py-1 rounded border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-accent)] transition-colors"
-      title="View history"
+    <button
+      onclick={onToggleMode}
+      class="text-xs px-2.5 py-1 rounded border transition-colors {viewMode === 'history'
+        ? 'border-[var(--color-accent)] text-[var(--color-accent)] bg-[var(--color-accent)]/10'
+        : 'border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-accent)]'}"
+      title="Toggle history view (H)"
     >
-      History
-    </a>
+      {viewMode === 'history' ? 'Board' : 'History'}
+    </button>
     <span class="border-l border-[var(--color-border)] h-4 self-center mx-0.5"></span>
     {#if isCurrentWeek}
       {#if !rolloverConfirming}
@@ -125,6 +129,10 @@
             <div class="flex gap-4">
               <kbd class="font-mono">B</kbd>
               <span>Toggle backlog</span>
+            </div>
+            <div class="flex gap-4">
+              <kbd class="font-mono">H</kbd>
+              <span>Toggle history</span>
             </div>
             <div class="flex gap-4">
               <kbd class="font-mono">⌘K</kbd>
