@@ -78,11 +78,6 @@
     return d.toISOString().slice(0, 10);
   }
 
-  function toLocalHHMM(utcDatetime: string): string {
-    const d = new Date(utcDatetime.replace(' ', 'T') + 'Z');
-    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
-  }
-
   type DayBar = {
     label: string; date: string; hours: number;
     segments: { card_type: string; hours: number; color: string }[];
@@ -102,9 +97,14 @@
       const daySessions = sessionEntries.filter(s => s.date === date && s.end_time !== null);
       let sessionLabel = '–';
       if (daySessions.length > 0) {
-        const first = toLocalHHMM(daySessions[0].start_time);
-        const last = toLocalHHMM(daySessions[daySessions.length - 1].end_time!);
-        sessionLabel = `${first}–${last}`;
+        const totalH = daySessions.reduce((sum, s) => {
+          const start = new Date(s.start_time.replace(' ', 'T') + 'Z').getTime();
+          const end = new Date(s.end_time!.replace(' ', 'T') + 'Z').getTime();
+          return sum + (end - start) / 3_600_000;
+        }, 0);
+        const h = Math.floor(totalH);
+        const m = Math.round((totalH - h) * 60);
+        sessionLabel = m > 0 ? `${h}h${m}m` : `${h}h`;
       }
       return { label, date, hours, segments: entries.map(e => ({ card_type: e.card_type, hours: e.hours, color: typeColor(e.card_type) })), sessionLabel };
     });
@@ -215,20 +215,23 @@
 
       <!-- Items by card type -->
       {#each cardsByType as [type, cards] (type)}
+        {@const doneCount = cards.filter(c => c.status === 'done').length}
         <section>
-          <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-muted)] mb-2 capitalize">{type}</h3>
-          <div class="flex flex-col gap-1">
+          <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-muted)] mb-2 capitalize flex items-baseline gap-2">
+            {type}
+            <span class="font-normal normal-case tracking-normal">{cards.length} · {doneCount} done</span>
+          </h3>
+          <ul class="flex flex-col gap-0.5">
             {#each cards as card (card.id)}
-              <div
-                class="text-sm px-3 py-1.5 rounded border border-[var(--color-border)] {card.status === 'done' ? 'opacity-40' : ''}"
-              >
-                <span class="text-[var(--color-text)]">{card.title}</span>
+              <li class="flex items-baseline gap-1.5 {card.status === 'done' ? 'opacity-40' : ''}">
+                <span class="text-[var(--color-muted)] text-xs shrink-0">·</span>
+                <span class="text-sm text-[var(--color-text)]">{card.title}</span>
                 {#if card.time_estimate && card.time_estimate > 0}
-                  <span class="text-xs text-[var(--color-muted)] ml-2">{card.time_estimate.toFixed(1)}h</span>
+                  <span class="text-xs text-[var(--color-muted)] shrink-0">{card.time_estimate.toFixed(1)}h</span>
                 {/if}
-              </div>
+              </li>
             {/each}
-          </div>
+          </ul>
         </section>
       {/each}
 
@@ -268,35 +271,6 @@
         </section>
       {/if}
 
-      <!-- Pie chart -->
-      {#if pieSlices.length > 0}
-        <section>
-          <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-muted)] mb-2">Breakdown</h3>
-          <div class="flex items-center gap-4">
-            <svg width="80" height="80" viewBox="0 0 80 80" class="shrink-0">
-              {#each pieSlices as slice (slice.label)}
-                <path
-                  d={pieArcPath(40, 40, 36, slice.startAngle, slice.endAngle)}
-                  fill={slice.color}
-                  opacity="0.85"
-                />
-              {/each}
-              <circle cx="40" cy="40" r="18" fill="var(--color-background)" />
-              <text x="40" y="44" text-anchor="middle" fill="var(--color-text-muted)" font-size="8">{pieTotal.toFixed(1)}h</text>
-            </svg>
-            <div class="flex flex-col gap-1">
-              {#each pieSlices as slice (slice.label)}
-                <span class="text-[0.6rem] text-[var(--color-text-muted)] flex items-center gap-1.5">
-                  <span class="inline-block w-2 h-2 rounded-sm shrink-0" style="background: {slice.color}"></span>
-                  <span class="capitalize">{slice.label}</span>
-                  <span class="tabular-nums text-[var(--color-muted)]">{slice.hours.toFixed(1)}h · {slice.pct}%</span>
-                </span>
-              {/each}
-            </div>
-          </div>
-        </section>
-      {/if}
-
       <!-- AI Summary -->
       <section>
         <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-muted)] mb-2">Summary</h3>
@@ -322,6 +296,35 @@
           <p class="text-xs text-red-400 mt-1">{summaryError}</p>
         {/if}
       </section>
+
+      <!-- Breakdown (pie chart) — last -->
+      {#if pieSlices.length > 0}
+        <section>
+          <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-muted)] mb-2">Breakdown</h3>
+          <div class="flex items-center gap-6">
+            <svg width="120" height="120" viewBox="0 0 120 120" class="shrink-0">
+              {#each pieSlices as slice (slice.label)}
+                <path
+                  d={pieArcPath(60, 60, 54, slice.startAngle, slice.endAngle)}
+                  fill={slice.color}
+                  opacity="0.85"
+                />
+              {/each}
+              <circle cx="60" cy="60" r="26" fill="var(--color-background)" />
+              <text x="60" y="65" text-anchor="middle" fill="var(--color-text-muted)" font-size="10">{pieTotal.toFixed(1)}h</text>
+            </svg>
+            <div class="flex flex-col gap-1.5">
+              {#each pieSlices as slice (slice.label)}
+                <span class="text-xs text-[var(--color-text-muted)] flex items-center gap-2">
+                  <span class="inline-block w-2.5 h-2.5 rounded-sm shrink-0" style="background: {slice.color}"></span>
+                  <span class="capitalize">{slice.label}</span>
+                  <span class="tabular-nums text-[var(--color-muted)]">{slice.hours.toFixed(1)}h · {slice.pct}%</span>
+                </span>
+              {/each}
+            </div>
+          </div>
+        </section>
+      {/if}
 
     </div>
   {/if}

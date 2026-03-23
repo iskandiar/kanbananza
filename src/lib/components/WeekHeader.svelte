@@ -73,9 +73,9 @@
     </a>
     <button
       onclick={onToggleMode}
-      class="text-xs px-2.5 py-1 rounded border transition-colors {viewMode === 'history'
-        ? 'border-[var(--color-accent)] text-[var(--color-accent)] bg-[var(--color-accent)]/10'
-        : 'border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-accent)]'}"
+      class="text-xs px-2.5 py-1 rounded transition-colors {viewMode === 'history'
+        ? 'bg-[var(--color-accent)]/15 text-[var(--color-accent)] font-medium'
+        : 'bg-[var(--color-surface-raised)] text-[var(--color-muted)] hover:text-[var(--color-text)]'}"
       title="Toggle history view (H)"
     >
       {viewMode === 'history' ? 'Board' : 'History'}
