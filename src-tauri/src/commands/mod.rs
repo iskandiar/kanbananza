@@ -9,4 +9,5 @@ pub mod settings;
 pub mod shell;
 pub mod sync_review;
 pub mod time_entries;
+pub mod tray;
 pub mod weeks;

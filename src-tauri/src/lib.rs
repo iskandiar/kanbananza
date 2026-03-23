@@ -32,6 +32,7 @@ use commands::{
         finalize_card_time, list_card_entries_for_week, list_day_entries_for_week,
     },
     time_entries::{clock_in, clock_out, list_time_entries, update_time_entry, delete_time_entry, create_manual_time_entry, list_time_entries_for_week},
+    tray::refresh_tray,
     weeks::*,
 };
 use db::DbState;
@@ -83,6 +84,9 @@ pub fn run() {
                 }
             }
             app.manage(DbState(Mutex::new(conn)));
+
+            // Tray icon setup
+            crate::tray::setup_tray(app.handle())?;
 
             // OAuth callback is handled via loopback TCP in get_calendar_auth_url —
             // no deep-link handler needed.
@@ -213,6 +217,8 @@ pub fn run() {
             confirm_linear_sync,
             fetch_gitlab_preview,
             confirm_gitlab_sync,
+            // Tray
+            refresh_tray,
         ])
         .run(tauri::generate_context!())
         .unwrap_or_else(|e| {
