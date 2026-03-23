@@ -20,6 +20,7 @@
     tasks = [],
     availableHours,
     isToday = false,
+    isPastWeek = false,
     onAddCard,
     onMoveCard,
     onMarkDone,
@@ -36,6 +37,7 @@
     tasks: Card[];
     availableHours: number;
     isToday?: boolean;
+    isPastWeek?: boolean;
     onAddCard: (title: string) => void;
     onMoveCard: (cardId: number, weekId: number | null, dayOfWeek: number | null, position: number) => void;
     onMarkDone: (cardId: number) => void;
@@ -363,24 +365,35 @@
     </div>
 
     {#if doneTasks.length + doneMeetings.length > 0}
-      <div>
-        <button
-          onclick={() => (showDone = !showDone)}
-          class="text-xs text-[var(--color-muted)] hover:text-[var(--color-text)] transition-colors"
-        >
-          {showDone ? '▾' : '▸'} {doneTasks.length + doneMeetings.length} done · {doneHoursByType.toFixed(1)}h consumed
-        </button>
-        {#if showDone}
-          <div class="flex flex-col gap-1.5 mt-1.5 pb-1">
-            {#each doneMeetings as card (card.id)}
-              <CardComponent {card} {onMarkDone} {isToday} />
-            {/each}
-            {#each doneTasks as card (card.id)}
-              <CardComponent {card} {onMarkDone} {isToday} />
-            {/each}
-          </div>
-        {/if}
-      </div>
+      {#if isPastWeek}
+        <div class="flex flex-col gap-1.5 mt-1.5 pb-1 opacity-40">
+          {#each doneMeetings as card (card.id)}
+            <CardComponent {card} {onMarkDone} {isToday} />
+          {/each}
+          {#each doneTasks as card (card.id)}
+            <CardComponent {card} {onMarkDone} {isToday} />
+          {/each}
+        </div>
+      {:else}
+        <div>
+          <button
+            onclick={() => (showDone = !showDone)}
+            class="text-xs text-[var(--color-muted)] hover:text-[var(--color-text)] transition-colors"
+          >
+            {showDone ? '▾' : '▸'} {doneTasks.length + doneMeetings.length} done · {doneHoursByType.toFixed(1)}h consumed
+          </button>
+          {#if showDone}
+            <div class="flex flex-col gap-1.5 mt-1.5 pb-1">
+              {#each doneMeetings as card (card.id)}
+                <CardComponent {card} {onMarkDone} {isToday} />
+              {/each}
+              {#each doneTasks as card (card.id)}
+                <CardComponent {card} {onMarkDone} {isToday} />
+              {/each}
+            </div>
+          {/if}
+        </div>
+      {/if}
     {/if}
   </div>
 
