@@ -47,6 +47,9 @@
     if (e.key === '[') boardStore.navigateWeek(-1);
     else if (e.key === ']') boardStore.navigateWeek(1);
     else if (e.key === 'b' || e.key === 'B') sidebarOpen = !sidebarOpen;
+    else if (e.key === 'h' || e.key === 'H') {
+      boardStore.viewMode = boardStore.viewMode === 'board' ? 'history' : 'board';
+    }
   }
 
   async function handleAddCard(dayOfWeek: number | null, title: string) {
@@ -87,6 +90,13 @@
     availableHours={settingsStore.availableHours}
     isCurrentWeek={boardStore.isCurrentWeek}
     {sidebarOpen}
+    viewMode={boardStore.viewMode}
+    isPastWeek={boardStore.isPastWeek}
+    onToggleMode={() => {
+      boardStore.viewMode = boardStore.viewMode === 'board' ? 'history' : 'board';
+    }}
+    currentWeek={boardStore.currentWeek}
+    weekCards={boardStore.cards.filter(c => c.week_id === boardStore.currentWeek?.id)}
     onPrevWeek={() => boardStore.navigateWeek(-1)}
     onNextWeek={() => boardStore.navigateWeek(1)}
     onJumpToToday={() => boardStore.loadCurrentWeek()}

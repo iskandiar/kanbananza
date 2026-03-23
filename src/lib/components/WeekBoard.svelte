@@ -11,6 +11,11 @@
     availableHours,
     isCurrentWeek = true,
     sidebarOpen = false,
+    viewMode = 'board' as 'board' | 'history',
+    isPastWeek = false,
+    onToggleMode,
+    currentWeek,
+    weekCards = [] as Card[],
     onPrevWeek,
     onNextWeek,
     onJumpToToday,
@@ -29,6 +34,11 @@
     availableHours: number;
     isCurrentWeek: boolean;
     sidebarOpen?: boolean;
+    viewMode?: 'board' | 'history';
+    isPastWeek?: boolean;
+    onToggleMode: () => void;
+    currentWeek: import('$lib/types').Week | null;
+    weekCards?: Card[];
     onPrevWeek: () => void;
     onNextWeek: () => void;
     onJumpToToday: () => void;
@@ -51,51 +61,59 @@
 </script>
 
 <div class="flex flex-col h-screen text-[var(--color-text)]">
-  <WeekHeader {weekLabel} onPrev={onPrevWeek} onNext={onNextWeek} {isCurrentWeek} {onJumpToToday} {onRollover} {unfinishedCount} clockedHours={weeklyClocked} />
+  <WeekHeader {weekLabel} onPrev={onPrevWeek} onNext={onNextWeek} {isCurrentWeek} {onJumpToToday} {onRollover} {unfinishedCount} clockedHours={weeklyClocked} {viewMode} {onToggleMode} />
 
   <div class="flex flex-1 min-h-0">
-    <div class="flex flex-1 min-w-0 overflow-x-auto">
-      {#each days as day (day.date)}
-        <DayColumn
-          label={day.label}
-          date={day.date}
-          displayDate={day.displayDate}
-          dayOfWeek={day.dayOfWeek}
-          weekId={day.weekId}
-          isToday={day.isToday}
-          meetings={day.meetings}
-          tasks={day.tasks}
-          {availableHours}
-          onAddCard={(title: string) => onAddCard(day.dayOfWeek, title)}
-          {onMoveCard}
-          {onMarkDone}
-          {onCardCreated}
-          onMoveToNextWeek={onMoveCardToNextWeek}
-          onClockedUpdate={(hours) => { clockedByDay = { ...clockedByDay, [day.date]: hours }; }}
-        />
-      {/each}
-    </div>
+    {#if viewMode === 'board'}
+      <div class="flex flex-1 min-w-0 overflow-x-auto">
+        {#each days as day (day.date)}
+          <DayColumn
+            label={day.label}
+            date={day.date}
+            displayDate={day.displayDate}
+            dayOfWeek={day.dayOfWeek}
+            weekId={day.weekId}
+            isToday={day.isToday}
+            meetings={day.meetings}
+            tasks={day.tasks}
+            {availableHours}
+            {isPastWeek}
+            onAddCard={(title: string) => onAddCard(day.dayOfWeek, title)}
+            {onMoveCard}
+            {onMarkDone}
+            {onCardCreated}
+            onMoveToNextWeek={onMoveCardToNextWeek}
+            onClockedUpdate={(hours) => { clockedByDay = { ...clockedByDay, [day.date]: hours }; }}
+          />
+        {/each}
+      </div>
 
-    <BacklogSidebar
-      cards={backlogCards}
-      isOpen={sidebarOpen}
-      onAddCard={(title) => onAddCard(null, title)}
-      onClose={() => onToggleSidebar?.()}
-      {onMoveCard}
-      {onMarkDone}
-      {onCardCreated}
-      {onScheduleToday}
-    />
+      <BacklogSidebar
+        cards={backlogCards}
+        isOpen={sidebarOpen}
+        onAddCard={(title) => onAddCard(null, title)}
+        onClose={() => onToggleSidebar?.()}
+        {onMoveCard}
+        {onMarkDone}
+        {onCardCreated}
+        {onScheduleToday}
+      />
 
-    {#if !sidebarOpen}
-      <button
-        onclick={() => onToggleSidebar?.()}
-        class="flex-shrink-0 w-12 border-l border-[var(--color-border)] flex flex-col items-center justify-center text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface)] transition-colors gap-0.5"
-        title="Open backlog"
-      >
-        <span class="text-xs">≡</span>
-        <span class="text-xs">{backlogCards.length}</span>
-      </button>
+      {#if !sidebarOpen}
+        <button
+          onclick={() => onToggleSidebar?.()}
+          class="flex-shrink-0 w-12 border-l border-[var(--color-border)] flex flex-col items-center justify-center text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface)] transition-colors gap-0.5"
+          title="Open backlog"
+        >
+          <span class="text-xs">≡</span>
+          <span class="text-xs">{backlogCards.length}</span>
+        </button>
+      {/if}
+    {:else}
+      <!-- HistoryReport rendered in Task 6 -->
+      <div class="flex-1 flex items-center justify-center text-sm text-[var(--color-muted)]">
+        History report coming…
+      </div>
     {/if}
   </div>
 </div>
