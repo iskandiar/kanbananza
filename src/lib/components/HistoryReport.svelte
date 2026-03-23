@@ -110,9 +110,10 @@
     });
   });
 
+  const ah = $derived(Math.max(1, availableHours ?? 8));
+
   const maxOverflowH = $derived(
     Math.min(28, Math.max(0, ...dayBars.map(d => {
-      const ah = Math.max(1, availableHours ?? 8);
       return d.hours > ah ? Math.round(((d.hours - ah) / ah) * BAR_HEIGHT) : 0;
     })))
   );
@@ -213,37 +214,13 @@
   {:else}
     <div class="max-w-2xl mx-auto px-6 py-6 flex flex-col gap-6">
 
-      <!-- Items by card type -->
-      {#each cardsByType as [type, cards] (type)}
-        {@const doneCount = cards.filter(c => c.status === 'done').length}
-        <section>
-          <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-muted)] mb-2 capitalize flex items-baseline gap-2">
-            {type}
-            <span class="font-normal normal-case tracking-normal">{cards.length} · {doneCount} done</span>
-          </h3>
-          <ul class="flex flex-col gap-0.5">
-            {#each cards as card (card.id)}
-              <li class="flex items-baseline gap-1.5 {card.status === 'done' ? 'opacity-40' : ''}">
-                <span class="text-[var(--color-muted)] text-xs shrink-0">·</span>
-                <span class="text-sm text-[var(--color-text)]">{card.title}</span>
-                {#if card.time_estimate && card.time_estimate > 0}
-                  <span class="text-xs text-[var(--color-muted)] shrink-0">{card.time_estimate.toFixed(1)}h</span>
-                {/if}
-              </li>
-            {/each}
-          </ul>
-        </section>
-      {/each}
-
-      <!-- Stacked bar chart -->
-      {#if sessionTotalHours > 0 || dayBars.some(d => d.hours > 0)}
-        {@const ah = Math.max(1, availableHours ?? 8)}
-        <section>
-          <div class="flex items-center justify-between mb-2">
-            <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-muted)]">Time</h3>
-            <span class="text-xs tabular-nums text-[var(--color-muted)]">{sessionTotalHours.toFixed(1)}h clocked</span>
-          </div>
-          <div class="flex gap-2 items-end">
+      <!-- Stacked bar chart — always shown -->
+      <section>
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-muted)]">Time</h3>
+          <span class="text-xs tabular-nums text-[var(--color-muted)]">{sessionTotalHours.toFixed(1)}h clocked</span>
+        </div>
+        <div class="flex gap-2 items-end">
             {#each dayBars as day (day.date)}
               {@const barH = Math.min(BAR_HEIGHT, Math.round((day.hours / ah) * BAR_HEIGHT))}
               {@const overflowH = day.hours > ah ? Math.round(((day.hours - ah) / ah) * BAR_HEIGHT) : 0}
@@ -269,7 +246,6 @@
             {/each}
           </div>
         </section>
-      {/if}
 
       <!-- AI Summary -->
       <section>
@@ -297,7 +273,7 @@
         {/if}
       </section>
 
-      <!-- Breakdown (pie chart) — last -->
+      <!-- Breakdown (pie chart) -->
       {#if pieSlices.length > 0}
         <section>
           <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-muted)] mb-2">Breakdown</h3>
@@ -325,6 +301,28 @@
           </div>
         </section>
       {/if}
+
+      <!-- Items by card type — last -->
+      {#each cardsByType as [type, cards] (type)}
+        {@const doneCount = cards.filter(c => c.status === 'done').length}
+        <section>
+          <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-muted)] mb-2 capitalize flex items-baseline gap-2">
+            {type}
+            <span class="font-normal normal-case tracking-normal">{cards.length} · {doneCount} done</span>
+          </h3>
+          <ul class="flex flex-col gap-0.5">
+            {#each cards as card (card.id)}
+              <li class="flex items-baseline gap-1.5 {card.status === 'done' ? 'opacity-40' : ''}">
+                <span class="text-[var(--color-muted)] text-xs shrink-0">·</span>
+                <span class="text-sm text-[var(--color-text)]">{card.title}</span>
+                {#if card.time_estimate && card.time_estimate > 0}
+                  <span class="text-xs text-[var(--color-muted)] shrink-0">{card.time_estimate.toFixed(1)}h</span>
+                {/if}
+              </li>
+            {/each}
+          </ul>
+        </section>
+      {/each}
 
     </div>
   {/if}

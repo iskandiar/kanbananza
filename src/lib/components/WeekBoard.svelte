@@ -55,14 +55,35 @@
 
   let clockedByDay = $state<Record<string, number>>({});
   const weeklyClocked = $derived(Object.values(clockedByDay).reduce((s, h) => s + h, 0));
+  const weeklyEstimated = $derived(weekCards.reduce((s, c) => s + (c.time_estimate ?? 0), 0));
 
   const unfinishedCount = $derived(
     days.flatMap(d => d.tasks).filter(c => c.status === 'planned').length
   );
+
+  function setViewMode(mode: 'board' | 'history') {
+    if (viewMode !== mode) onToggleMode();
+  }
 </script>
 
 <div class="flex flex-col h-screen text-[var(--color-text)]">
-  <WeekHeader {weekLabel} onPrev={onPrevWeek} onNext={onNextWeek} {isCurrentWeek} {onJumpToToday} {onRollover} {unfinishedCount} clockedHours={weeklyClocked} {viewMode} {onToggleMode} />
+  <WeekHeader {weekLabel} onPrev={onPrevWeek} onNext={onNextWeek} {isCurrentWeek} {onJumpToToday} {onRollover} {unfinishedCount} clockedHours={weeklyClocked} estimatedHours={weeklyEstimated} />
+
+  <!-- View mode tab bar -->
+  <div class="flex gap-1 px-4 py-1.5 border-b border-[var(--color-border)] bg-[var(--color-glass-header)]">
+    <button
+      onclick={() => setViewMode('board')}
+      class="text-xs px-3 py-1 rounded transition-colors {viewMode === 'board'
+        ? 'bg-[var(--color-surface-raised)] text-[var(--color-text)] font-medium'
+        : 'text-[var(--color-muted)] hover:text-[var(--color-text)]'}"
+    >Board</button>
+    <button
+      onclick={() => setViewMode('history')}
+      class="text-xs px-3 py-1 rounded transition-colors {viewMode === 'history'
+        ? 'bg-[var(--color-surface-raised)] text-[var(--color-text)] font-medium'
+        : 'text-[var(--color-muted)] hover:text-[var(--color-text)]'}"
+    >History</button>
+  </div>
 
   <div class="flex flex-1 min-h-0">
     {#if viewMode === 'board'}

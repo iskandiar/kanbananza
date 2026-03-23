@@ -11,9 +11,8 @@
     onJumpToToday,
     onRollover,
     clockedHours,
-    viewMode = 'board' as 'board' | 'history',
-    onToggleMode = () => {}
-  }: { weekLabel: string; unfinishedCount: number; isCurrentWeek: boolean; onPrev: () => void; onNext: () => void; onJumpToToday: () => void; onRollover: () => void; clockedHours?: number; viewMode?: 'board' | 'history'; onToggleMode?: () => void } = $props();
+    estimatedHours,
+  }: { weekLabel: string; unfinishedCount: number; isCurrentWeek: boolean; onPrev: () => void; onNext: () => void; onJumpToToday: () => void; onRollover: () => void; clockedHours?: number; estimatedHours?: number } = $props();
 
   let rolloverConfirming = $state(false);
   let showShortcuts = $state(false);
@@ -52,7 +51,10 @@
       →
     </button>
     {#if clockedHours && clockedHours > 0}
-      <span class="text-xs text-[var(--color-muted)] pl-1 tabular-nums">{clockedHours.toFixed(1)}h</span>
+      <span class="text-xs text-[var(--color-muted)] pl-1 tabular-nums">{clockedHours.toFixed(1)}h clocked</span>
+    {/if}
+    {#if estimatedHours && estimatedHours > 0}
+      <span class="text-xs text-[var(--color-muted)] tabular-nums">{estimatedHours.toFixed(1)}h est.</span>
     {/if}
     {#if !isCurrentWeek}
       <button
@@ -71,15 +73,6 @@
     >
       Projects
     </a>
-    <button
-      onclick={onToggleMode}
-      class="text-xs px-2.5 py-1 rounded transition-colors {viewMode === 'history'
-        ? 'bg-[var(--color-accent)]/15 text-[var(--color-accent)] font-medium'
-        : 'bg-[var(--color-surface-raised)] text-[var(--color-muted)] hover:text-[var(--color-text)]'}"
-      title="Toggle history view (H)"
-    >
-      {viewMode === 'history' ? 'Board' : 'History'}
-    </button>
     <span class="border-l border-[var(--color-border)] h-4 self-center mx-0.5"></span>
     {#if isCurrentWeek}
       {#if !rolloverConfirming}
