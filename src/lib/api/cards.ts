@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { Card, CardType } from '$lib/types';
+import { refreshTray } from './tray';
 
 export const listCardsByWeek = (weekId: number | null): Promise<Card[]> =>
   invoke('list_cards_by_week', { weekId });
@@ -11,7 +12,9 @@ export const createCard = (
   dayOfWeek: number | null,
   projectId?: number,
   url?: string
-): Promise<Card> => invoke('create_card', { title, cardType, weekId, dayOfWeek, projectId, url });
+): Promise<Card> =>
+  invoke<Card>('create_card', { title, cardType, weekId, dayOfWeek, projectId, url })
+    .then(card => { refreshTray(); return card; });
 
 export const updateCard = (
   id: number,
@@ -30,19 +33,25 @@ export const updateCard = (
     projectId?: number;       // assign to a project
     clearProjectId?: boolean; // set project_id=NULL (unassign from project)
   }
-): Promise<Card> => invoke('update_card', { id, ...fields });
+): Promise<Card> =>
+  invoke<Card>('update_card', { id, ...fields })
+    .then(card => { refreshTray(); return card; });
 
 export const deleteCard = (id: number): Promise<void> =>
-  invoke('delete_card', { id });
+  invoke<void>('delete_card', { id })
+    .then(() => { refreshTray(); });
 
 export const createCardFromUrl = (
   url: string,
   weekId: number | null,
   dayOfWeek: number | null
-): Promise<Card> => invoke('create_card_from_url', { url, weekId, dayOfWeek });
+): Promise<Card> =>
+  invoke<Card>('create_card_from_url', { url, weekId, dayOfWeek })
+    .then(card => { refreshTray(); return card; });
 
 export const duplicateCard = (id: number): Promise<Card> =>
-  invoke('duplicate_card', { id });
+  invoke<Card>('duplicate_card', { id })
+    .then(card => { refreshTray(); return card; });
 
 export const searchCards = (query: string): Promise<Card[]> =>
   invoke('search_cards', { query });

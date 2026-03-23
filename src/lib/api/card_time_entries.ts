@@ -1,12 +1,17 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { CardTimeEntry, CardTypeHours, DayTypeHours } from '$lib/types';
+import { refreshTray } from './tray';
 
 export async function cardClockIn(cardId: number, date: string): Promise<CardTimeEntry> {
-  return invoke('card_clock_in', { cardId, date });
+  const entry = await invoke<CardTimeEntry>('card_clock_in', { cardId, date });
+  refreshTray();
+  return entry;
 }
 
 export async function cardClockOut(entryId: number): Promise<CardTimeEntry> {
-  return invoke('card_clock_out', { entryId });
+  const entry = await invoke<CardTimeEntry>('card_clock_out', { entryId });
+  refreshTray();
+  return entry;
 }
 
 export async function getActiveCardEntry(cardId: number): Promise<CardTimeEntry | null> {
