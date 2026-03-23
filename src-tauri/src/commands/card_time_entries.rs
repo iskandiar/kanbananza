@@ -427,4 +427,44 @@ mod tests {
         );
     }
 
+    // list_day_entries_for_week must NOT include estimate fallback for cards with no clock entries.
+    // It returns only actual clocked entries.
+    #[test]
+    fn list_day_entries_for_week_excludes_estimate_only_cards() {
+        let db = open_test_db();
+
+        // Create a week
+        db.execute(
+            "INSERT INTO weeks (year, week_number, start_date) VALUES (2026, 10, '2026-03-02')",
+            [],
+        ).unwrap();
+        let week_id = db.last_insert_rowid();
+
+        // Create card with estimate but NO clock entries
+        db.execute(
+            "INSERT INTO cards (title, card_type, status, position, week_id, day_of_week, time_estimate) VALUES ('Est Only', 'task', 'planned', 0, ?, 1, 5.0)",
+            [week_id],
+        ).unwrap();
+
+        // Create card with actual clock entry
+        db.execute(
+            "INSERT INTO cards (title, card_type, status, position, week_id, day_of_week) VALUES ('Clocked', 'meeting', 'planned', 1, ?, 2)",
+            [week_id],
+        ).unwrap();
+        let clocked_card_id = db.last_insert_rowid();
+
+        // Add 2h clock entry to the second card
+        db.execute(
+            "INSERT INTO card_time_entries (card_id, date, start_time, end_time) VALUES (?, '2026-03-03', '2026-03-03 09:00:00', '2026-03-03 11:00:00')",
+            [clocked_card_id],
+        ).unwrap();
+
+        let rows = db_list_day_entries_for_week(&db, week_id).unwrap();
+
+        // Should have only 1 row (the clocked entry), not 2
+        assert_eq!(rows.len(), 1, "must only return clocked entries, not estimate-only cards");
+        assert_eq!(rows[0].card_type, "meeting");
+        assert!((rows[0].hours - 2.0).abs() < 0.001);
+    }
+
 }

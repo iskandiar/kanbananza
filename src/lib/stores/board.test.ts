@@ -48,3 +48,25 @@ describe('boardStore.isPastWeek', () => {
     expect(boardStore.isPastWeek).toBe(false);
   });
 });
+
+describe('boardStore.viewMode', () => {
+  beforeEach(() => {
+    boardStore.viewMode = 'board';
+  });
+
+  it('defaults to board', () => {
+    const store = new (boardStore.constructor as any)();
+    expect(store.viewMode).toBe('board');
+  });
+
+  it('can be set to history', () => {
+    boardStore.viewMode = 'history';
+    expect(boardStore.viewMode).toBe('history');
+  });
+
+  it('can be toggled back to board', () => {
+    boardStore.viewMode = 'history';
+    boardStore.viewMode = 'board';
+    expect(boardStore.viewMode).toBe('board');
+  });
+});

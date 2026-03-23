@@ -115,3 +115,43 @@ pub async fn summarise_week(week_id: i64, notes: Option<String>, state: State<'_
 
     Ok(summary)
 }
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    /// Test helper: formats a user message with optional notes appended.
+    fn format_user_msg_with_notes(base_msg: &str, notes: Option<&str>) -> String {
+        let user_msg = base_msg;
+        if let Some(n) = notes {
+            format!("{user_msg}\n\nGuidance notes from user:\n{n}")
+        } else {
+            user_msg.to_string()
+        }
+    }
+
+    #[test]
+    fn user_msg_without_notes_unchanged() {
+        let base = "Task: Implement feature [planned]\nMeeting: Standup [done]";
+        let result = format_user_msg_with_notes(base, None);
+        assert_eq!(result, base);
+    }
+
+    #[test]
+    fn user_msg_with_notes_appended() {
+        let base = "Task: Implement feature [planned]";
+        let notes = "Focus on edge cases";
+        let result = format_user_msg_with_notes(base, Some(notes));
+        assert_eq!(result, "Task: Implement feature [planned]\n\nGuidance notes from user:\nFocus on edge cases");
+    }
+
+    #[test]
+    fn user_msg_with_multiline_notes() {
+        let base = "Tasks summary";
+        let notes = "Line 1\nLine 2\nLine 3";
+        let result = format_user_msg_with_notes(base, Some(notes));
+        assert_eq!(result, "Tasks summary\n\nGuidance notes from user:\nLine 1\nLine 2\nLine 3");
+    }
+}
