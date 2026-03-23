@@ -1,8 +1,7 @@
 <!-- src/lib/components/HistoryReport.svelte -->
 <script lang="ts">
   import { onMount } from 'svelte';
-  import type { Card, Week, DayTypeHours } from '$lib/types';
-  import { listDayEntriesForWeek } from '$lib/api/card_time_entries';
+  import type { Card, Week } from '$lib/types';
   import { listTimeEntriesForWeek, type DayTimeEntry } from '$lib/api/time_entries';
   import { summariseWeek } from '$lib/api/ai';
   import { toastStore } from '$lib/stores/toast.svelte';
@@ -14,7 +13,6 @@
     isPastWeek: boolean;
   } = $props();
 
-  let dayBreakdown = $state<DayTypeHours[]>([]);
   let sessionEntries = $state<DayTimeEntry[]>([]);
   let loading = $state(false);
   let error = $state<string | null>(null);
@@ -23,10 +21,7 @@
     if (!week || !isPastWeek) return;
     loading = true;
     try {
-      [dayBreakdown, sessionEntries] = await Promise.all([
-        listDayEntriesForWeek(week.id),
-        listTimeEntriesForWeek(week.start_date),
-      ]);
+      sessionEntries = await listTimeEntriesForWeek(week.start_date);
     } catch (e) {
       error = String(e);
     } finally {
@@ -92,21 +87,43 @@
     return DAY_LABELS.map((label, i) => {
       const date = dayDate(week!.start_date, i);
       const isFuture = date > today;
-      const entries = isFuture ? [] : dayBreakdown.filter(d => d.date === date);
-      const hours = entries.reduce((s, e) => s + e.hours, 0);
-      const daySessions = sessionEntries.filter(s => s.date === date && s.end_time !== null);
-      let sessionLabel = '–';
-      if (daySessions.length > 0) {
-        const totalH = daySessions.reduce((sum, s) => {
-          const start = new Date(s.start_time.replace(' ', 'T') + 'Z').getTime();
-          const end = new Date(s.end_time!.replace(' ', 'T') + 'Z').getTime();
-          return sum + (end - start) / 3_600_000;
-        }, 0);
-        const h = Math.floor(totalH);
-        const m = Math.round((totalH - h) * 60);
-        sessionLabel = m > 0 ? `${h}h${m}m` : `${h}h`;
+      const dayOfWeek = i + 1; // Mon=1 … Fri=5
+
+      // Estimates by card_type for cards assigned to this day
+      const estimateByType: Record<string, number> = {};
+      if (!isFuture) {
+        for (const c of weekCards.filter(c => c.day_of_week === dayOfWeek)) {
+          estimateByType[c.card_type] = (estimateByType[c.card_type] ?? 0) + (c.time_estimate ?? 0);
+        }
       }
-      return { label, date, hours, segments: entries.map(e => ({ card_type: e.card_type, hours: e.hours, color: typeColor(e.card_type) })), sessionLabel };
+      const totalEstimate = Object.values(estimateByType).reduce((s, h) => s + h, 0);
+
+      // Total clocked hours for this day from session entries
+      const daySessions = isFuture ? [] : sessionEntries.filter(s => s.date === date && s.end_time !== null);
+      const sessionHours = daySessions.reduce((sum, s) => {
+        const start = new Date(s.start_time.replace(' ', 'T') + 'Z').getTime();
+        const end = new Date(s.end_time!.replace(' ', 'T') + 'Z').getTime();
+        return sum + (end - start) / 3_600_000;
+      }, 0);
+
+      // Other = clocked time not accounted for by card estimates
+      const otherHours = Math.max(0, sessionHours - totalEstimate);
+
+      const segments: DayBar['segments'] = [
+        ...Object.entries(estimateByType)
+          .filter(([, h]) => h > 0)
+          .map(([type, h]) => ({ card_type: type, hours: h, color: typeColor(type) })),
+        ...(otherHours > 0.01 ? [{ card_type: 'other', hours: otherHours, color: '#6b7280' }] : []),
+      ];
+
+      const hours = segments.reduce((s, seg) => s + seg.hours, 0);
+
+      // Label below bar: total clocked hours for this day
+      const h = Math.floor(sessionHours);
+      const m = Math.round((sessionHours - h) * 60);
+      const sessionLabel = sessionHours > 0.01 ? (m > 0 ? `${h}h${m}m` : `${h}h`) : '–';
+
+      return { label, date, hours, segments, sessionLabel };
     });
   });
 

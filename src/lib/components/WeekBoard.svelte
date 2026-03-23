@@ -55,8 +55,6 @@
 
   let clockedByDay = $state<Record<string, number>>({});
   const weeklyClocked = $derived(Object.values(clockedByDay).reduce((s, h) => s + h, 0));
-  const weeklyEstimated = $derived(weekCards.reduce((s, c) => s + (c.time_estimate ?? 0), 0));
-
   const unfinishedCount = $derived(
     days.flatMap(d => d.tasks).filter(c => c.status === 'planned').length
   );
@@ -67,7 +65,7 @@
 </script>
 
 <div class="flex flex-col h-screen text-[var(--color-text)]">
-  <WeekHeader {weekLabel} onPrev={onPrevWeek} onNext={onNextWeek} {isCurrentWeek} {onJumpToToday} {onRollover} {unfinishedCount} clockedHours={weeklyClocked} estimatedHours={weeklyEstimated} />
+  <WeekHeader {weekLabel} onPrev={onPrevWeek} onNext={onNextWeek} {isCurrentWeek} {onJumpToToday} {onRollover} {unfinishedCount} clockedHours={weeklyClocked} />
 
   <!-- View mode tab bar -->
   <div class="flex gap-1 px-4 py-1.5 border-b border-[var(--color-border)] bg-[var(--color-glass-header)]">
