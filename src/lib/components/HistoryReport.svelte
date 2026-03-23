@@ -4,6 +4,8 @@
   import type { Card, Week, DayTypeHours } from '$lib/types';
   import { listDayEntriesForWeek } from '$lib/api/card_time_entries';
   import { listTimeEntriesForWeek, type DayTimeEntry } from '$lib/api/time_entries';
+  import { summariseWeek } from '$lib/api/ai';
+  import { toastStore } from '$lib/stores/toast.svelte';
 
   let { week, weekCards, availableHours, isPastWeek }: {
     week: Week | null;
@@ -175,6 +177,28 @@
     return buildPieSlices(input);
   });
   const pieTotal = $derived(pieSlices.reduce((s, sl) => s + sl.hours, 0));
+
+  let notesInput = $state('');
+  let summarising = $state(false);
+  let summaryError = $state<string | null>(null);
+  let localSummary = $state<string | null>(null);
+
+  const displaySummary = $derived(localSummary ?? week?.summary ?? null);
+
+  async function handleSummarise() {
+    if (!week) return;
+    summarising = true;
+    summaryError = null;
+    try {
+      const result = await summariseWeek(week.id, notesInput || undefined);
+      localSummary = result;
+      toastStore.add('Summary generated', 'success');
+    } catch (e) {
+      summaryError = String(e);
+    } finally {
+      summarising = false;
+    }
+  }
 </script>
 
 <div class="flex-1 overflow-y-auto">
@@ -272,6 +296,32 @@
           </div>
         </section>
       {/if}
+
+      <!-- AI Summary -->
+      <section>
+        <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-muted)] mb-2">Summary</h3>
+        {#if displaySummary}
+          <p class="text-sm text-[var(--color-text-muted)] leading-relaxed mb-3">{displaySummary}</p>
+        {/if}
+        <div class="flex gap-2 items-start">
+          <textarea
+            bind:value={notesInput}
+            placeholder="Add guiding notes (optional)…"
+            rows="2"
+            class="flex-1 text-xs bg-[var(--color-surface)] border border-[var(--color-border)] rounded px-2 py-1.5 text-[var(--color-text)] placeholder:text-[var(--color-muted)] resize-none focus:outline-none focus:border-[var(--color-accent)]"
+          ></textarea>
+          <button
+            onclick={handleSummarise}
+            disabled={summarising || weekCards.length === 0}
+            class="shrink-0 text-xs px-2.5 py-1 rounded border border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-text)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
+          >
+            {summarising ? '…' : '✦ Summarize'}
+          </button>
+        </div>
+        {#if summaryError}
+          <p class="text-xs text-red-400 mt-1">{summaryError}</p>
+        {/if}
+      </section>
 
     </div>
   {/if}

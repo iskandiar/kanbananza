@@ -5,7 +5,7 @@ use rusqlite::OptionalExtension;
 use tauri::State;
 
 #[tauri::command]
-pub async fn summarise_week(week_id: i64, state: State<'_, DbState>) -> Result<String, String> {
+pub async fn summarise_week(week_id: i64, notes: Option<String>, state: State<'_, DbState>) -> Result<String, String> {
     // Phase A: fetch cards + API key (no lock across await)
     let (cards, clocked_hours, client) = {
         let db = state.0.lock().map_err(|e| e.to_string())?;
@@ -92,6 +92,12 @@ pub async fn summarise_week(week_id: i64, state: State<'_, DbState>) -> Result<S
         .collect::<Vec<_>>()
         .join("\n")
         + &time_section;
+
+    let user_msg = if let Some(ref n) = notes {
+        format!("{user_msg}\n\nGuidance notes from user:\n{n}")
+    } else {
+        user_msg
+    };
 
     let summary = client
         .complete(SYSTEM_PROMPT_WEEK_SUMMARY, &user_msg)
