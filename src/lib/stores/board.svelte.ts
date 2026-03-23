@@ -10,6 +10,7 @@ class BoardStore {
   cards = $state<Card[]>([]);
   isLoading = $state(false);
   error = $state<string | null>(null);
+  viewMode = $state<'board' | 'history'>('board');
   private _calendarUnlisten: (() => void) | null = null;
   private _gitlabUnlisten: (() => void) | null = null;
 
@@ -58,6 +59,15 @@ class BoardStore {
     return w.start_date === todayWeekStart;
   }
 
+  // Is the current week strictly before today's week?
+  get isPastWeek(): boolean {
+    const w = this.currentWeek;
+    if (!w) return false;
+    const today = new Date();
+    const { startDate: todayWeekStart } = isoWeek(today);
+    return w.start_date < todayWeekStart;
+  }
+
   // Day columns for the current week with label, date, cards, etc.
   get days(): Array<{
     label: string;
@@ -103,6 +113,7 @@ class BoardStore {
       const today = new Date();
       const { year, weekNumber, startDate } = isoWeek(today);
       this.currentWeek = await weeksApi.getOrCreateWeek(year, weekNumber, startDate);
+      this.viewMode = this.isPastWeek ? 'history' : 'board';
       await this._loadCards();
     } catch (e) {
       this.error = `Failed to load board: ${e}`;
@@ -132,6 +143,7 @@ class BoardStore {
     this.error = null;
     try {
       this.currentWeek = await weeksApi.getOrCreateWeek(year, weekNumber, startDate);
+      this.viewMode = this.isPastWeek ? 'history' : 'board';
       await this._loadCards();
     } catch (e) {
       this.error = `Failed to navigate week: ${e}`;
@@ -147,6 +159,7 @@ class BoardStore {
     this.error = null;
     try {
       this.currentWeek = await weeksApi.getOrCreateWeek(year, weekNumber, startDate);
+      this.viewMode = this.isPastWeek ? 'history' : 'board';
       await this._loadCards();
     } catch (e) {
       this.error = `Failed to navigate: ${e}`;
