@@ -138,6 +138,7 @@ fn elapsed_minutes(start_time: &str) -> i64 {
     let start = NaiveDateTime::parse_from_str(start_time, fmt).ok();
     match start {
         Some(s) => {
+            // SQLite datetime('now') always stores UTC — compare against UTC to match.
             let now = Local::now().naive_utc();
             (now - s).num_minutes().max(0)
         }
