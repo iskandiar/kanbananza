@@ -1,6 +1,5 @@
 <!-- src/lib/components/HistoryReport.svelte -->
 <script lang="ts">
-  import { onMount } from 'svelte';
   import type { Card, Week } from '$lib/types';
   import { listTimeEntriesForWeek, type DayTimeEntry } from '$lib/api/time_entries';
   import { summariseWeek } from '$lib/api/ai';
@@ -16,17 +15,30 @@
   let sessionEntries = $state<DayTimeEntry[]>([]);
   let loading = $state(false);
   let error = $state<string | null>(null);
+  let notesInput = $state('');
+  let summarising = $state(false);
+  let summaryError = $state<string | null>(null);
+  let localSummary = $state<string | null>(null);
 
-  onMount(async () => {
-    if (!week || !isPastWeek) return;
-    loading = true;
-    try {
-      sessionEntries = await listTimeEntriesForWeek(week.start_date);
-    } catch (e) {
-      error = String(e);
-    } finally {
+  $effect(() => {
+    const weekId = week?.id;
+    const startDate = week?.start_date;
+    if (!weekId || !startDate || !isPastWeek) {
+      sessionEntries = [];
       loading = false;
+      return;
     }
+    let cancelled = false;
+    loading = true;
+    error = null;
+    sessionEntries = [];
+    localSummary = null;
+    notesInput = '';
+    listTimeEntriesForWeek(startDate)
+      .then(entries => { if (!cancelled) sessionEntries = entries; })
+      .catch(e => { if (!cancelled) error = String(e); })
+      .finally(() => { if (!cancelled) loading = false; });
+    return () => { cancelled = true; };
   });
 
   // Group cards by card_type — returns array of [type, cards] tuples for Svelte {#each}
@@ -195,11 +207,6 @@
     return buildPieSlices(input);
   });
   const pieTotal = $derived(pieSlices.reduce((s, sl) => s + sl.hours, 0));
-
-  let notesInput = $state('');
-  let summarising = $state(false);
-  let summaryError = $state<string | null>(null);
-  let localSummary = $state<string | null>(null);
 
   const displaySummary = $derived(localSummary ?? week?.summary ?? null);
 

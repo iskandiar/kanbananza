@@ -135,8 +135,8 @@ class BoardStore {
   }
 
   async navigateWeek(direction: 1 | -1) {
-    if (!this.currentWeek) return;
-    const start = new Date(this.currentWeek.start_date);
+    if (!this.currentWeek || this.isLoading) return;
+    const start = new Date(this.currentWeek.start_date + 'T00:00:00');
     start.setDate(start.getDate() + direction * 7);
     const { year, weekNumber, startDate } = isoWeek(start);
     this.isLoading = true;
