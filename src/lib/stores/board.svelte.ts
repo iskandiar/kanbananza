@@ -111,6 +111,7 @@ class BoardStore {
   async loadCurrentWeek() {
     this.isLoading = true;
     this.error = null;
+    this.calendarSyncError = null;
     try {
       const today = new Date();
       const { year, weekNumber, startDate } = isoWeek(today);
