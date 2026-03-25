@@ -1,4 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+
+vi.mock('@tauri-apps/api/event', () => ({
+  listen: vi.fn().mockResolvedValue(() => {}),
+}));
+
 import { boardStore } from './board.svelte';
 
 describe('boardStore.isPastWeek', () => {
@@ -46,6 +51,27 @@ describe('boardStore.isPastWeek', () => {
       summary: null
     };
     expect(boardStore.isPastWeek).toBe(false);
+  });
+});
+
+describe('boardStore.calendarSyncError', () => {
+  beforeEach(() => {
+    boardStore.calendarSyncError = null;
+  });
+
+  it('is null by default', () => {
+    expect(boardStore.calendarSyncError).toBeNull();
+  });
+
+  it('can be set to an error string', () => {
+    boardStore.calendarSyncError = 'token refresh error 401: Token has been expired or revoked.';
+    expect(boardStore.calendarSyncError).toBe('token refresh error 401: Token has been expired or revoked.');
+  });
+
+  it('can be cleared back to null', () => {
+    boardStore.calendarSyncError = 'some error';
+    boardStore.calendarSyncError = null;
+    expect(boardStore.calendarSyncError).toBeNull();
   });
 });
 

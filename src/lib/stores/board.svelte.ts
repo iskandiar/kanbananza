@@ -11,7 +11,9 @@ class BoardStore {
   isLoading = $state(false);
   error = $state<string | null>(null);
   viewMode = $state<'board' | 'history'>('board');
+  calendarSyncError = $state<string | null>(null);
   private _calendarUnlisten: (() => void) | null = null;
+  private _calendarErrorUnlisten: (() => void) | null = null;
   private _gitlabUnlisten: (() => void) | null = null;
 
   // Cards with no week assigned — the global backlog (exclude done cards)
@@ -122,8 +124,23 @@ class BoardStore {
     }
 
     if (!this._calendarUnlisten) {
-      listen<null>('calendar://synced', () => this._loadCards()).then(fn => {
+      listen<{ count: number; error: string | null }>('calendar://synced', (event) => {
+        if (event.payload.error) {
+          this.calendarSyncError = event.payload.error;
+        } else {
+          this.calendarSyncError = null;
+          this._loadCards();
+        }
+      }).then(fn => {
         this._calendarUnlisten = fn;
+      });
+    }
+
+    if (!this._calendarErrorUnlisten) {
+      listen<{ message: string }>('calendar://error', (event) => {
+        this.calendarSyncError = event.payload.message;
+      }).then(fn => {
+        this._calendarErrorUnlisten = fn;
       });
     }
 
