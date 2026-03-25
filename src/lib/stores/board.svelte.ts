@@ -158,6 +158,7 @@ class BoardStore {
     const { year, weekNumber, startDate } = isoWeek(start);
     this.isLoading = true;
     this.error = null;
+    this.calendarSyncError = null;
     try {
       this.currentWeek = await weeksApi.getOrCreateWeek(year, weekNumber, startDate);
       this.viewMode = this.isPastWeek ? 'history' : 'board';
@@ -174,6 +175,7 @@ class BoardStore {
     const { year, weekNumber } = isoWeek(d);
     this.isLoading = true;
     this.error = null;
+    this.calendarSyncError = null;
     try {
       this.currentWeek = await weeksApi.getOrCreateWeek(year, weekNumber, startDate);
       this.viewMode = this.isPastWeek ? 'history' : 'board';

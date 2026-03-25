@@ -83,6 +83,13 @@
     Loading…
   </div>
 {:else}
+  {#if boardStore.calendarSyncError}
+    <div class="flex items-center gap-2 px-4 py-1.5 text-xs border-b bg-amber-900/40 border-amber-700/40 text-amber-200">
+      <span>⚠</span>
+      <span class="truncate flex-1">Google Calendar disconnected — {boardStore.calendarSyncError}</span>
+      <a href="/settings" class="shrink-0 underline hover:text-amber-100 transition-colors">Settings →</a>
+    </div>
+  {/if}
   <WeekBoard
     weekLabel={weekLabel()}
     days={boardStore.days}
